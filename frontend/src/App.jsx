@@ -1,0 +1,629 @@
+import React, { useState, useEffect } from 'react';
+import HeaderNavbar from './components/HeaderNavbar';
+import IndexScannerBar from './components/IndexScannerBar';
+import MondayTop15Panel from './components/MondayTop15Panel';
+import StockConfluenceCard from './components/StockConfluenceCard';
+import DematPortfolioModal from './components/DematPortfolioModal';
+import OrderExecutionModal from './components/OrderExecutionModal';
+import WhatsAppPreviewModal from './components/WhatsAppPreviewModal';
+import ConnectBrokerModal from './components/ConnectBrokerModal';
+import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
+import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart } from 'lucide-react';
+
+export default function App() {
+  const [market, setMarket] = useState({
+    nifty_50: 24280.50,
+    nifty_change_pct: 0.42,
+    regime: 'BULLISH_TRENDING',
+    fii_dii_cr: 1850
+  });
+
+  const [demat, setDemat] = useState({
+    mode: 'SANDBOX',
+    broker: 'Pulse91 Sandbox Broker',
+    account_id: 'PULSE91-DEMAT-SBX-01',
+    account_net_worth: 1000000.00,
+    available_cash: 785400.00,
+    invested_value: 268750.00,
+    total_unrealized_pnl: 14500.00,
+    total_unrealized_pnl_pct: 5.4,
+    today_pnl: 2280.00,
+    holdings: [],
+    positions: []
+  });
+
+  const [mondayData, setMondayData] = useState(null);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState('NIFTY_AUTO');
+  const [indexScanResult, setIndexScanResult] = useState(null);
+  const [isScanningIndex, setIsScanningIndex] = useState(false);
+  const [isRefreshingMonday, setIsRefreshingMonday] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMainTab, setActiveMainTab] = useState('MONDAY_WATCHLIST');
+  const [layoutMode, setLayoutMode] = useState('SPLIT_SCREEN'); // 'SPLIT_SCREEN' or 'STACKED'
+  const [autotrader, setAutotrader] = useState(null);
+
+  // Modals
+  const [isDematModalOpen, setIsDematModalOpen] = useState(false);
+  const [isConnectBrokerOpen, setIsConnectBrokerOpen] = useState(false);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [orderModalStock, setOrderModalStock] = useState(null);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [whatsAppModalStock, setWhatsAppModalStock] = useState(null);
+  const [isDeepDiveModalOpen, setIsDeepDiveModalOpen] = useState(false);
+
+  // Fetch initial data
+  useEffect(() => {
+    fetchDemat();
+    fetchMondayScan();
+    fetchAutotraderStatus();
+    handleScanIndex('NIFTY_AUTO');
+
+    // Connect WebSocket
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
+    let ws = null;
+    try {
+      ws = new WebSocket(`${protocol}//${host}/ws`);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'TICK_UPDATE') {
+            if (msg.market) setMarket(msg.market);
+            if (msg.demat) {
+              setDemat((prev) => ({
+                ...prev,
+                ...msg.demat
+              }));
+            }
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, []);
+
+  const fetchDemat = async () => {
+    try {
+      const res = await fetch('/api/v1/demat/overview');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.portfolio) setDemat(json.portfolio);
+      }
+    } catch (e) {
+      console.warn('Demat fetch:', e.message);
+    }
+  };
+
+  const fetchMondayScan = async (refresh = false) => {
+    setIsRefreshingMonday(true);
+    try {
+      const res = await fetch(`/api/v1/scan/monday-top15?refresh=${refresh}`);
+      if (res.ok) {
+        const json = await res.json();
+        setMondayData(json);
+      }
+    } catch (e) {
+      console.warn('Monday scan error:', e.message);
+    } finally {
+      setIsRefreshingMonday(false);
+    }
+  };
+
+  const fetchStockEvaluation = async (symbol, openModal = true) => {
+    try {
+      const res = await fetch(`/api/v1/scan/stock/${symbol}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) {
+          setSelectedStock(json.data);
+          if (openModal) setIsDeepDiveModalOpen(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Stock eval error:', e.message);
+    }
+  };
+
+  const handleScanIndex = async (indexKey) => {
+    setIsScanningIndex(true);
+    setActiveMainTab('INDEX_SCAN');
+    try {
+      const res = await fetch(`/api/v1/scan/index?index_key=${indexKey}`);
+      if (res.ok) {
+        const json = await res.json();
+        setIndexScanResult(json);
+      }
+    } catch (e) {
+      console.warn('Index scan error:', e.message);
+    } finally {
+      setIsScanningIndex(false);
+    }
+  };
+
+  const currentList = activeMainTab === 'INDEX_SCAN'
+    ? (indexScanResult?.rankings || [])
+    : (mondayData?.picks || []);
+
+  const currentIndex = currentList.findIndex((s) => s.symbol === selectedStock?.symbol);
+
+  const handleNavigateStock = (direction) => {
+    if (currentIndex === -1 || currentList.length === 0) return;
+    const nextIdx = currentIndex + direction;
+    if (nextIdx >= 0 && nextIdx < currentList.length) {
+      fetchStockEvaluation(currentList[nextIdx].symbol, true);
+    }
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      fetchStockEvaluation(searchQuery.trim().toUpperCase());
+    }
+  };
+
+  const handleToggleMode = async (selectedBroker = 'Groww') => {
+    const nextMode = demat.mode === 'SANDBOX' ? 'LIVE_DEMAT' : 'SANDBOX';
+    try {
+      const res = await fetch('/api/v1/demat/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: nextMode,
+          broker: selectedBroker,
+          account_id: `${selectedBroker.toUpperCase()}-CLIENT-91`
+        })
+      });
+      if (res.ok) {
+        fetchDemat();
+      }
+    } catch (e) {}
+  };
+
+  const handleConfirmOrder = async (orderPayload) => {
+    try {
+      const res = await fetch('/api/v1/trade/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderPayload)
+      });
+      if (res.ok) {
+        setIsOrderModalOpen(false);
+        fetchDemat();
+        fetchAutotraderStatus();
+      }
+    } catch (e) {}
+  };
+
+  const handleExitPosition = async (symbol) => {
+    try {
+      const res = await fetch('/api/v1/trade/exit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol })
+      });
+      if (res.ok) {
+        fetchDemat();
+        fetchAutotraderStatus();
+      }
+    } catch (e) {}
+  };
+
+  const fetchAutotraderStatus = async () => {
+    try {
+      const res = await fetch('/api/v1/trade/autotrader/status');
+      if (res.ok) {
+        const json = await res.json();
+        setAutotrader(json);
+      }
+    } catch (e) {}
+  };
+
+  const handleToggleAutotrader = async () => {
+    try {
+      const res = await fetch('/api/v1/trade/autotrader/toggle', { method: 'POST' });
+      if (res.ok) {
+        const json = await res.json();
+        setAutotrader(json.status);
+      }
+    } catch (e) {}
+  };
+
+  const handleRunAutotraderCycle = async () => {
+    try {
+      const res = await fetch('/api/v1/trade/autotrader/cycle', { method: 'POST' });
+      if (res.ok) {
+        const json = await res.json();
+        setAutotrader(json.status);
+        fetchDemat();
+      }
+    } catch (e) {}
+  };
+
+  const handleSendWhatsApp = async (symbol, phone) => {
+    try {
+      await fetch('/api/v1/alerts/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, phone_number: phone })
+      });
+      setIsWhatsAppModalOpen(false);
+    } catch (e) {}
+  };
+
+  return (
+    <div className="min-h-screen bg-[#080b11] text-gray-100 flex flex-col font-sans">
+      {/* 1. Header Navbar */}
+      <HeaderNavbar
+        market={market}
+        demat={demat}
+        onOpenDemat={() => setIsDematModalOpen(true)}
+        onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
+        onToggleMode={handleToggleMode}
+      />
+
+      {/* 2. On-Demand Index Scanner Toolbar */}
+      <IndexScannerBar
+        selectedIndex={selectedIndex}
+        onSelectIndex={(key) => {
+          setSelectedIndex(key);
+          handleScanIndex(key);
+        }}
+        onScanIndex={handleScanIndex}
+        isScanning={isScanningIndex}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+      />
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+        {/* Top Control Bar: Active Tab (Scanner vs Monday Watchlist) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1b2336] pb-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveMainTab('MONDAY_WATCHLIST')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeMainTab === 'MONDAY_WATCHLIST'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-md'
+                  : 'bg-[#121724] border border-[#1e2638] text-gray-400 hover:text-white hover:bg-[#182133]'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Monday 08:00 AM Watchlist (Top 15)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveMainTab('INDEX_SCAN');
+                if (!indexScanResult) handleScanIndex(selectedIndex);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeMainTab === 'INDEX_SCAN'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-md'
+                  : 'bg-[#121724] border border-[#1e2638] text-gray-400 hover:text-white hover:bg-[#182133]'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              <span>On-Demand Index Scanner</span>
+              {indexScanResult && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-mono">
+                  {indexScanResult.index_name}
+                </span>
+              )}
+              {isScanningIndex && <RefreshCw className="w-3 h-3 animate-spin text-emerald-400 ml-1" />}
+            </button>
+
+            <button
+              onClick={() => setActiveMainTab('PORTFOLIO_POSITIONS')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeMainTab === 'PORTFOLIO_POSITIONS'
+                  ? 'bg-emerald-500/20 border border-emerald-500/60 text-emerald-300 shadow-md'
+                  : 'bg-[#121724] border border-[#1e2638] text-gray-400 hover:text-white hover:bg-[#182133]'
+              }`}
+            >
+              <Briefcase className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Positions & Demat ({((demat?.holdings?.length || 0) + (demat?.positions?.length || 0))})</span>
+              {autotrader?.is_active && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" title="Auto-Trader Active"></span>
+              )}
+            </button>
+          </div>
+
+          <div className="text-xs text-gray-400 font-mono hidden sm:flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Click any stock row to open full TradingView Candlestick Chart</span>
+          </div>
+        </div>
+
+        {/* 1. Monday 08:00 AM Top 15 Master Watchlist (Full Width, Crisp & Spacious) */}
+        {activeMainTab === 'MONDAY_WATCHLIST' && (
+          <MondayTop15Panel
+            mondayData={mondayData}
+            onSelectStock={(sym) => fetchStockEvaluation(sym, true)}
+            onOpenWhatsApp={(stock) => {
+              setWhatsAppModalStock(stock);
+              setIsWhatsAppModalOpen(true);
+            }}
+            onOpenOrder={(stock) => {
+              setOrderModalStock(stock);
+              setIsOrderModalOpen(true);
+            }}
+            onRefreshMonday={() => fetchMondayScan(true)}
+            isRefreshing={isRefreshingMonday}
+            selectedSymbol={selectedStock?.symbol}
+          />
+        )}
+
+        {/* 2. On-Demand Scanned Index Constituents Table (Full Width) */}
+        {activeMainTab === 'INDEX_SCAN' && (
+          <div className="bg-[#0c101a] border border-[#1b2336] rounded-xl p-5 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#1b2336] gap-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <Layers className="w-4 h-4" />
+                  </span>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    {indexScanResult?.index_name || selectedIndex} — On-Demand Live Scan
+                  </h3>
+                  <span className="text-[11px] font-mono bg-[#161f30] text-gray-300 border border-[#232f48] px-2 py-0.5 rounded-full">
+                    {indexScanResult?.total_constituents || 0} Constituents
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  {indexScanResult?.description || 'Instant 5-pillar quant scanning across this sector index.'}
+                </p>
+              </div>
+
+              {/* Summary Stats Badges */}
+              {indexScanResult?.summary && (
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Strong Buy</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                      {indexScanResult.summary.strong_buy_count}
+                    </span>
+                  </div>
+                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Momentum Buy</span>
+                    <span className="font-mono font-bold text-cyan-400 text-sm">
+                      {indexScanResult.summary.momentum_buy_count}
+                    </span>
+                  </div>
+                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Avg Score</span>
+                    <span className="font-mono font-bold text-white text-sm">
+                      {indexScanResult.summary.average_confluence_score}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {isScanningIndex ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-emerald-400">
+                <RefreshCw className="w-6 h-6 animate-spin" />
+                <span className="text-xs font-mono">Running 5-Pillar Confluence Engine on {selectedIndex}...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto no-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-[#1b2336] text-gray-400 font-semibold uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-2"># Rank</th>
+                      <th className="py-3 px-3">Stock & Sector</th>
+                      <th className="py-3 px-3">LTP (₹)</th>
+                      <th className="py-3 px-3">Confluence Score</th>
+                      <th className="py-3 px-3">Verdict</th>
+                      <th className="py-3 px-3">Holding Horizon</th>
+                      <th className="py-3 px-3">Buy Zone</th>
+                      <th className="py-3 px-3">Target 1</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#161d2d]">
+                    {indexScanResult?.rankings?.map((stock, idx) => {
+                      const score = stock.confluence_score;
+                      const isStrong = stock.verdict === 'STRONG BUY';
+                      const rank = idx + 1;
+                      const isSelected = selectedStock?.symbol === stock.symbol;
+
+                      return (
+                        <tr
+                          key={stock.symbol}
+                          className={`hover:bg-[#131926] transition-colors group cursor-pointer ${
+                            isSelected ? 'bg-emerald-500/15 border-l-2 border-emerald-400' : ''
+                          }`}
+                          onClick={() => fetchStockEvaluation(stock.symbol, true)}
+                        >
+                          {/* Rank */}
+                          <td className="py-3.5 px-2 font-mono">
+                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-xs ${
+                              rank <= 3
+                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                : 'bg-[#151c2b] text-gray-400 border border-[#20293d]'
+                            }`}>
+                              {rank}
+                            </span>
+                          </td>
+
+                          {/* Stock & Sector */}
+                          <td className="py-3.5 px-3">
+                            <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1.5 font-mono">
+                              {stock.symbol}
+                              <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400" />
+                            </div>
+                            <div className="text-[11px] text-gray-400 truncate max-w-[170px]">
+                              {stock.company_name}
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-medium">
+                              {stock.sector}
+                            </div>
+                          </td>
+
+                          {/* LTP */}
+                          <td className="py-3.5 px-3 font-mono font-bold text-gray-200">
+                            ₹{stock.ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </td>
+
+                          {/* Confluence Score */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-sm text-white">
+                                {score}
+                              </span>
+                              <span className="text-[10px] text-gray-500">/100</span>
+                            </div>
+                            <div className="w-24 bg-[#1b2336] h-1.5 rounded-full overflow-hidden mt-1">
+                              <div
+                                className={`h-full rounded-full ${
+                                  score >= 80 ? 'bg-emerald-500' : 'bg-blue-500'
+                                }`}
+                                style={{ width: `${score}%` }}
+                              ></div>
+                            </div>
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              {stock.conviction_rate || '84.5% Win-Rate'}
+                            </div>
+                          </td>
+
+                          {/* Verdict */}
+                          <td className="py-3.5 px-3">
+                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
+                              isStrong ? 'badge-strong-buy' : 'badge-momentum-buy'
+                            }`}>
+                              {stock.verdict}
+                            </span>
+                          </td>
+
+                          {/* Holding Horizon */}
+                          <td className="py-3.5 px-3 text-gray-300 font-medium">
+                            {stock.horizon_name}
+                          </td>
+
+                          {/* Buy Zone */}
+                          <td className="py-3.5 px-3 font-mono text-gray-300">
+                            {stock.trade_plan?.entry_range || `₹${(stock.ltp * 0.995).toFixed(1)} - ₹${(stock.ltp * 1.005).toFixed(1)}`}
+                          </td>
+
+                          {/* Target 1 */}
+                          <td className="py-3.5 px-3 font-mono">
+                            <div className="text-emerald-400 font-semibold">
+                              ₹{(stock.trade_plan?.target_1_price || stock.trade_plan?.target_1 || (stock.ltp * 1.0555)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            </div>
+                            <span className="text-[10px] text-gray-500 font-normal">
+                              (+5.55%)
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end">
+                              <button
+                                onClick={() => {
+                                  setOrderModalStock(stock);
+                                  setIsOrderModalOpen(true);
+                                }}
+                                title="1-Click Demat Buy"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-sm"
+                              >
+                                <ShoppingCart className="w-3.5 h-3.5" />
+                                <span>Buy</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Open Positions & Demat Portfolio with SELL Actions */}
+        {activeMainTab === 'PORTFOLIO_POSITIONS' && (
+          <PortfolioPositionsPanel
+            demat={demat}
+            autotrader={autotrader}
+            onToggleAutotrader={handleToggleAutotrader}
+            onRunCycle={handleRunAutotraderCycle}
+            onExitPosition={handleExitPosition}
+            onSelectStock={(sym) => fetchStockEvaluation(sym, true)}
+          />
+        )}
+      </main>
+
+      {/* Stock Deep-Dive Modal Drawer (Opens on click, zero scrolling required) */}
+      {isDeepDiveModalOpen && selectedStock && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl">
+            <StockConfluenceCard
+              stockData={selectedStock}
+              onExecuteOrder={(stock) => {
+                setOrderModalStock(stock);
+                setIsOrderModalOpen(true);
+              }}
+              onOpenWhatsApp={(stock) => {
+                setWhatsAppModalStock(stock);
+                setIsWhatsAppModalOpen(true);
+              }}
+              onClose={() => setIsDeepDiveModalOpen(false)}
+              onPrev={() => handleNavigateStock(-1)}
+              onNext={() => handleNavigateStock(1)}
+              hasPrev={currentIndex > 0}
+              hasNext={currentIndex < currentList.length - 1}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      <DematPortfolioModal
+        isOpen={isDematModalOpen}
+        onClose={() => setIsDematModalOpen(false)}
+        portfolio={demat}
+        onExitPosition={handleExitPosition}
+        onToggleMode={handleToggleMode}
+      />
+
+      <ConnectBrokerModal
+        isOpen={isConnectBrokerOpen}
+        onClose={() => setIsConnectBrokerOpen(false)}
+        activeBroker={demat.broker}
+        activeMode={demat.mode}
+        onConnected={(broker) => {
+          fetchDemat();
+        }}
+        onDisconnect={() => {
+          fetchDemat();
+        }}
+      />
+
+      <OrderExecutionModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        stock={orderModalStock}
+        onConfirmOrder={handleConfirmOrder}
+        availableCash={demat.available_cash}
+      />
+
+      <WhatsAppPreviewModal
+        isOpen={isWhatsAppModalOpen}
+        onClose={() => setIsWhatsAppModalOpen(false)}
+        stock={whatsAppModalStock}
+        onSendWhatsApp={handleSendWhatsApp}
+      />
+
+      {/* Footer */}
+      <footer className="border-t border-[#1b2336] bg-[#0b0f19] py-3 px-4 text-center text-xs text-gray-500 font-mono">
+        PULSE91 DALAL STREET QUANT TERMINAL • SEBI REGISTERED BROKER GATEWAY • 5-PILLAR REJECTION MATRIX
+      </footer>
+    </div>
+  );
+}
