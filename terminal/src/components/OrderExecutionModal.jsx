@@ -32,28 +32,36 @@ export default function OrderExecutionModal({
     }
   }, [stock, ltp]);
 
-  // Derived financial calculations
-  const totalInvestment = Math.round(ltp * quantity);
-  const slDiff = ltp - slPrice;
-  const slPct = ((slPrice - ltp) / ltp) * 100;
-  const maxLossINR = Math.round(slDiff * quantity);
+  // Derived financial calculations with safety for typing / empty inputs
+  const effectiveQty = quantity === '' ? 0 : (Number(quantity) || 0);
+  const effectiveSl = slPrice === '' ? slDefault : (Number(slPrice) || slDefault);
+  const effectiveTarget = targetPrice === '' ? targetDefault : (Number(targetPrice) || targetDefault);
 
-  const targetDiff = targetPrice - ltp;
-  const targetPct = ((targetPrice - ltp) / ltp) * 100;
-  const maxProfitINR = Math.round(targetDiff * quantity);
+  const totalInvestment = Math.round(ltp * effectiveQty);
+  const slDiff = ltp - effectiveSl;
+  const slPct = ((effectiveSl - ltp) / ltp) * 100;
+  const maxLossINR = Math.round(slDiff * effectiveQty);
+
+  const targetDiff = effectiveTarget - ltp;
+  const targetPct = ((effectiveTarget - ltp) / ltp) * 100;
+  const maxProfitINR = Math.round(targetDiff * effectiveQty);
 
   const hasSufficientFunds = (availableCash || 1000000) >= totalInvestment;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    const finalQty = Math.max(1, parseInt(quantity, 10) || 1);
+    const finalSl = Number(slPrice) || slDefault;
+    const finalTarget = Number(targetPrice) || targetDefault;
+
     onConfirmOrder({
       symbol: stock.symbol,
-      quantity,
+      quantity: finalQty,
       side: 'BUY',
       product,
       price: ltp,
-      sl_price: gttEnabled ? slPrice : null,
-      target_price: gttEnabled ? targetPrice : null
+      sl_price: gttEnabled ? finalSl : null,
+      target_price: gttEnabled ? finalTarget : null
     });
   };
 
@@ -136,9 +144,23 @@ export default function OrderExecutionModal({
                 <input
                   type="number"
                   min="1"
-                  max="10000"
+                  max="100000"
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setQuantity('');
+                    } else {
+                      const parsed = parseInt(val, 10);
+                      setQuantity(isNaN(parsed) ? '' : parsed);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!quantity || Number(quantity) < 1) {
+                      setQuantity(1);
+                    }
+                  }}
+                  placeholder="10"
                   className="w-full bg-[#181f30] border border-[#27324a] rounded-lg px-3 py-2 font-mono text-white font-bold text-sm focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -151,7 +173,7 @@ export default function OrderExecutionModal({
                     type="button"
                     onClick={() => setQuantity(preset)}
                     className={`px-2.5 py-1.5 rounded-md font-mono text-xs font-semibold border transition-all ${
-                      quantity === preset
+                      Number(quantity) === preset
                         ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
                         : 'bg-[#161d2d] text-gray-400 border-[#222b40] hover:text-white hover:bg-[#1a2336]'
                     }`}
@@ -196,7 +218,12 @@ export default function OrderExecutionModal({
                       type="number"
                       step="0.05"
                       value={slPrice}
-                      onChange={(e) => setSlPrice(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => setSlPrice(e.target.value)}
+                      onBlur={() => {
+                        if (!slPrice || Number(slPrice) <= 0) {
+                          setSlPrice(slDefault);
+                        }
+                      }}
                       className="w-full bg-[#111723] border border-[#253147] rounded px-2.5 py-1.5 font-mono text-red-400 font-bold text-xs focus:outline-none"
                     />
                   </div>
@@ -219,7 +246,12 @@ export default function OrderExecutionModal({
                       type="number"
                       step="0.05"
                       value={targetPrice}
-                      onChange={(e) => setTargetPrice(parseFloat(e.target.value) || 0)}
+                      onChange={(e) => setTargetPrice(e.target.value)}
+                      onBlur={() => {
+                        if (!targetPrice || Number(targetPrice) <= 0) {
+                          setTargetPrice(targetDefault);
+                        }
+                      }}
                       className="w-full bg-[#111723] border border-[#253147] rounded px-2.5 py-1.5 font-mono text-emerald-400 font-bold text-xs focus:outline-none"
                     />
                   </div>
