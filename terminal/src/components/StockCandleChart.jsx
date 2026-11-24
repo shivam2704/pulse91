@@ -9,6 +9,7 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
   const volumeSeriesRef = useRef(null);
   const ma20SeriesRef = useRef(null);
   const priceLinesRef = useRef([]);
+  const initialFitDoneRef = useRef(false);
 
   const [candles, setCandles] = useState([]);
   const [timeframe, setTimeframe] = useState('D');
@@ -19,6 +20,7 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
   // 1. Fetch candle data whenever symbol or timeframe changes
   useEffect(() => {
     if (!symbol) return;
+    initialFitDoneRef.current = false; // Reset fit lock on symbol or timeframe switch
     let isMounted = true;
     setLoading(true);
 
@@ -194,13 +196,14 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
       ma20SeriesRef.current.setData(ma20Data);
     }
 
-    // Only fit content on initial data load if timeScale hasn't been panned/zoomed
-    if (chartRef.current) {
+    // Only fit content on INITIAL data load per symbol/timeframe so user zoom/pan is never wiped!
+    if (chartRef.current && !initialFitDoneRef.current && formattedCandles.length > 0) {
       chartRef.current.timeScale().fitContent();
+      initialFitDoneRef.current = true;
     }
   }, [candles]);
 
-  // 4. Update Price Lines (Pivot, T1, SL) dynamically without resetting chart view
+  // 4. Update Price Lines (Pivot, T1, SL) dynamically with explicit % badges
   const pivotBuy = vcpData?.pivot_buy_point;
   const target1 = tradePlan?.target_1_price || tradePlan?.target_1;
   const target2 = tradePlan?.target_2_price || tradePlan?.target_2;
@@ -220,58 +223,68 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
 
     if (!showOverlays) return;
 
+    const basePrice = ltp || (candles.length > 0 ? candles[candles.length - 1].close : null);
+
     // Pivot Line
     if (pivotBuy) {
+      const pct = basePrice ? (((pivotBuy - basePrice) / basePrice) * 100).toFixed(1) : null;
+      const pctLabel = pct !== null ? ` (${Number(pct) >= 0 ? '+' : ''}${pct}%)` : '';
       const line = series.createPriceLine({
         price: pivotBuy,
         color: '#06b6d4',
         lineWidth: 1.5,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: 'PIVOT'
+        title: `PIVOT${pctLabel}`
       });
       priceLinesRef.current.push(line);
     }
 
     // Target 1 Line
     if (target1) {
+      const pct = basePrice ? (((target1 - basePrice) / basePrice) * 100).toFixed(1) : null;
+      const pctLabel = pct !== null ? ` (+${Math.abs(Number(pct))}%)` : '';
       const line = series.createPriceLine({
         price: target1,
         color: '#10b981',
         lineWidth: 1,
         lineStyle: 1,
         axisLabelVisible: true,
-        title: 'T1'
+        title: `T1${pctLabel}`
       });
       priceLinesRef.current.push(line);
     }
 
     // Target 2 Line
     if (target2) {
+      const pct = basePrice ? (((target2 - basePrice) / basePrice) * 100).toFixed(1) : null;
+      const pctLabel = pct !== null ? ` (+${Math.abs(Number(pct))}%)` : '';
       const line = series.createPriceLine({
         price: target2,
         color: '#34d399',
         lineWidth: 1,
         lineStyle: 1,
         axisLabelVisible: true,
-        title: 'T2'
+        title: `T2${pctLabel}`
       });
       priceLinesRef.current.push(line);
     }
 
     // Stop Loss Line
     if (stopLoss) {
+      const pct = basePrice ? (((stopLoss - basePrice) / basePrice) * 100).toFixed(1) : null;
+      const pctLabel = pct !== null ? ` (-${Math.abs(Number(pct))}%)` : '';
       const line = series.createPriceLine({
         price: stopLoss,
         color: '#ef4444',
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: true,
-        title: 'SL'
+        title: `SL${pctLabel}`
       });
       priceLinesRef.current.push(line);
     }
-  }, [showOverlays, pivotBuy, target1, target2, stopLoss]);
+  }, [showOverlays, pivotBuy, target1, target2, stopLoss, ltp, candles]);
 
   const handleResetZoom = () => {
     if (chartRef.current) {
