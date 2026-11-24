@@ -33,14 +33,14 @@ def format_whatsapp_alert(symbol: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/whatsapp/send")
-async def send_whatsapp_alert(payload: WhatsAppSendPayload):
+def send_whatsapp_alert(payload: WhatsAppSendPayload):
     """
     Dispatches a live WhatsApp trade alert for a given stock.
     """
     try:
         evaluation = confluence_engine.evaluate_stock(payload.symbol)
         text = whatsapp_alerter.format_trade_alert(evaluation)
-        res = await whatsapp_alerter.dispatch_whatsapp(text, payload.phone_number, payload.webhook_url)
+        res = whatsapp_alerter.dispatch_whatsapp(text, payload.phone_number, payload.webhook_url)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

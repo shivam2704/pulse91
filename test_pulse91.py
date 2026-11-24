@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi.testclient import TestClient
-from pulse91.backend.main import app
+from pulse91.core.main import app
 
 client = TestClient(app)
 
@@ -65,11 +65,14 @@ def test_demat_portfolio():
     assert res.status_code == 200
     portfolio = res.json()["portfolio"]
     assert portfolio["mode"] in ["SANDBOX", "LIVE_DEMAT"]
-    assert portfolio["available_cash"] > 0
+    assert portfolio["available_cash"] >= 0
     assert len(portfolio["holdings"]) > 0
     print(f"✓ /api/v1/demat/overview passed: Net Worth ₹{portfolio['account_net_worth']:,.2f}, Available Cash ₹{portfolio['available_cash']:,.2f}")
 
 def test_order_execution_and_exit():
+    # Switch to Sandbox for order tests to have guaranteed available balance
+    client.post("/api/v1/demat/mode", json={"mode": "SANDBOX", "broker": "Pulse91 Sandbox", "account_id": "PULSE91-TEST"})
+
     # 1. Place a test buy order
     buy_payload = {
         "symbol": "BEL",

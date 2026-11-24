@@ -114,11 +114,11 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
-# Mount Frontend static build if present (MUST BE AT THE END OF APP ROUTING)
-frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-if os.path.exists(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+# Mount Terminal static build if present (MUST BE AT THE END OF APP ROUTING)
+terminal_dist = os.path.join(os.path.dirname(__file__), "..", "terminal", "dist")
+if os.path.exists(terminal_dist):
+    app.mount("/", StaticFiles(directory=terminal_dist, html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("pulse91.backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("pulse91.core.main:app", host="0.0.0.0", port=8000, reload=True)

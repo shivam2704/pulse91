@@ -24,7 +24,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Build outputs
-frontend/dist/
+terminal/dist/
 dist/
 
 # Editor & OS files

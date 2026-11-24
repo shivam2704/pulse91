@@ -64,17 +64,17 @@ Pulse91 is an institutional-grade quant trading terminal engineered specifically
 
 ## 🚀 Getting Started
 
-### 1. Backend Server
+### 1. Core Quant Server
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt # or fastapi uvicorn httpx growwapi dhanhq kiteconnect smartapi-python pyotp
-python3 -m uvicorn pulse91.backend.main:app --host 0.0.0.0 --port 8000
+pip install -r requirements.txt
+python3 -m uvicorn pulse91.core.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 2. Frontend Terminal
+### 2. Trading Terminal (UI)
 ```bash
-cd pulse91/frontend
+cd pulse91/terminal
 npm install
 npm run build # or npm run dev
 ```
