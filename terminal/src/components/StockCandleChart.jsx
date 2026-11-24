@@ -1,17 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType, CandlestickSeries, HistogramSeries, LineSeries } from 'lightweight-charts';
-import { BarChart2, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { BarChart2, RefreshCw, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
 export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
+  const candleSeriesRef = useRef(null);
+  const volumeSeriesRef = useRef(null);
+  const ma20SeriesRef = useRef(null);
+  const priceLinesRef = useRef([]);
+
   const [candles, setCandles] = useState([]);
   const [timeframe, setTimeframe] = useState('D');
   const [loading, setLoading] = useState(false);
   const [hoverData, setHoverData] = useState(null);
   const [showOverlays, setShowOverlays] = useState(true);
 
-  // Fetch candle data whenever symbol or timeframe changes
+  // 1. Fetch candle data whenever symbol or timeframe changes
   useEffect(() => {
     if (!symbol) return;
     let isMounted = true;
@@ -34,10 +39,13 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
     };
   }, [symbol, timeframe]);
 
-  // Initialize and update Lightweight Chart
+  // 2. Initialize Lightweight Chart ONCE per symbol lifecycle (NEVER destroy on state/prop updates!)
   useEffect(() => {
-    if (!chartContainerRef.current || candles.length === 0) return;
+    if (!chartContainerRef.current) return;
 
+    const container = chartContainerRef.current;
+
+    // Remove any previous instance cleanly
     if (chartRef.current) {
       try {
         chartRef.current.remove();
@@ -46,7 +54,6 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
     }
 
     try {
-      const container = chartContainerRef.current;
       const chart = createChart(container, {
         layout: {
           background: { type: ColorType.Solid, color: '#090d16' },
@@ -72,7 +79,7 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
           autoScale: true,
           scaleMargins: {
             top: 0.08,
-            bottom: 0.22 // Leave bottom 22% empty for volume subpanel!
+            bottom: 0.22 // Leave bottom 22% empty for volume subpanel
           }
         },
         width: container.clientWidth || 600,
@@ -81,7 +88,7 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
 
       chartRef.current = chart;
 
-      // 1. Candlestick Series (Solid, bright candles)
+      // Candlestick Series
       const candleSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#10b981',
         downColor: '#ef4444',
@@ -90,113 +97,31 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
         wickUpColor: '#10b981',
         wickDownColor: '#ef4444'
       });
+      candleSeriesRef.current = candleSeries;
 
-      // 2. Volume Series: Dedicated subpanel at bottom 18% with visible: false on its scale
-      // This completely eliminates volume labels from invading the price scale and stops overlapping!
+      // Volume Series (Confined strictly to bottom 18% with hidden scale)
       const volumeSeries = chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'volume' },
         priceScaleId: 'volume_scale'
       });
-
       chart.priceScale('volume_scale').applyOptions({
-        visible: false, // Prevents volume numbers (e.g. 3.12M) from polluting the right price scale
+        visible: false,
         scaleMargins: {
-          top: 0.82, // Strictly confined to bottom 18% of chart height
+          top: 0.82,
           bottom: 0
         }
       });
+      volumeSeriesRef.current = volumeSeries;
 
-      // Sort and format candle data
-      const sorted = [...candles].sort((a, b) => a.time - b.time);
-      const formattedCandles = sorted.map((c) => ({
-        time: c.time,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close
-      }));
+      // 20-DMA Line Series
+      const ma20Series = chart.addSeries(LineSeries, {
+        color: '#f59e0b',
+        lineWidth: 1.5,
+        title: '20-SMA'
+      });
+      ma20SeriesRef.current = ma20Series;
 
-      // Subtle, semi-transparent volume bars (Institutional look)
-      const formattedVolumes = sorted.map((c) => ({
-        time: c.time,
-        value: c.volume,
-        color: c.close >= c.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'
-      }));
-
-      candleSeries.setData(formattedCandles);
-      volumeSeries.setData(formattedVolumes);
-
-      // 3. 20-DMA Line
-      if (formattedCandles.length > 20) {
-        const ma20Series = chart.addSeries(LineSeries, {
-          color: '#f59e0b',
-          lineWidth: 1.5,
-          title: '20-SMA'
-        });
-        const ma20Data = [];
-        for (let i = 19; i < formattedCandles.length; i++) {
-          const slice = formattedCandles.slice(i - 19, i + 1);
-          const avg = slice.reduce((acc, curr) => acc + curr.close, 0) / 20;
-          ma20Data.push({ time: formattedCandles[i].time, value: Number(avg.toFixed(2)) });
-        }
-        ma20Series.setData(ma20Data);
-      }
-
-      // 4. Quant Strategy Overlays (Concise, uncluttered badges)
-      if (showOverlays) {
-        // VCP Pivot Breakout Level
-        if (vcpData?.pivot_buy_point) {
-          candleSeries.createPriceLine({
-            price: vcpData.pivot_buy_point,
-            color: '#06b6d4',
-            lineWidth: 1.5,
-            lineStyle: 2, // Dashed
-            axisLabelVisible: true,
-            title: 'PIVOT'
-          });
-        }
-
-        // Target 1
-        const t1 = tradePlan?.target_1_price || tradePlan?.target_1;
-        if (t1) {
-          candleSeries.createPriceLine({
-            price: t1,
-            color: '#10b981',
-            lineWidth: 1,
-            lineStyle: 1, // Dotted
-            axisLabelVisible: true,
-            title: 'T1'
-          });
-        }
-
-        // Target 2 (Optional)
-        const t2 = tradePlan?.target_2_price || tradePlan?.target_2;
-        if (t2) {
-          candleSeries.createPriceLine({
-            price: t2,
-            color: '#34d399',
-            lineWidth: 1,
-            lineStyle: 1, // Dotted
-            axisLabelVisible: true,
-            title: 'T2'
-          });
-        }
-
-        // Stop Loss
-        const sl = tradePlan?.stop_loss_price;
-        if (sl) {
-          candleSeries.createPriceLine({
-            price: sl,
-            color: '#ef4444',
-            lineWidth: 1,
-            lineStyle: 2, // Dashed
-            axisLabelVisible: true,
-            title: 'SL'
-          });
-        }
-      }
-
-      // Crosshair Hover Tooltip
+      // Crosshair Hover Listener
       chart.subscribeCrosshairMove((param) => {
         if (!param || !param.time || !param.seriesData) {
           setHoverData(null);
@@ -216,8 +141,6 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
         }
       });
 
-      chart.timeScale().fitContent();
-
       const handleResize = () => {
         if (chartRef.current && container) {
           chartRef.current.applyOptions({ width: container.clientWidth });
@@ -234,10 +157,127 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
           chartRef.current = null;
         }
       };
-    } catch (chartErr) {
-      console.error('Chart initialization error:', chartErr);
+    } catch (err) {
+      console.error('Chart initialization error:', err);
     }
-  }, [candles, tradePlan, vcpData, showOverlays]);
+  }, [symbol]); // Only re-instantiate when the selected stock symbol changes!
+
+  // 3. Update Candle and Volume Data without wiping zoom / scroll positions
+  useEffect(() => {
+    if (!candleSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return;
+
+    const sorted = [...candles].sort((a, b) => a.time - b.time);
+    const formattedCandles = sorted.map((c) => ({
+      time: c.time,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close
+    }));
+
+    const formattedVolumes = sorted.map((c) => ({
+      time: c.time,
+      value: c.volume,
+      color: c.close >= c.open ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'
+    }));
+
+    candleSeriesRef.current.setData(formattedCandles);
+    volumeSeriesRef.current.setData(formattedVolumes);
+
+    if (ma20SeriesRef.current && formattedCandles.length > 20) {
+      const ma20Data = [];
+      for (let i = 19; i < formattedCandles.length; i++) {
+        const slice = formattedCandles.slice(i - 19, i + 1);
+        const avg = slice.reduce((acc, curr) => acc + curr.close, 0) / 20;
+        ma20Data.push({ time: formattedCandles[i].time, value: Number(avg.toFixed(2)) });
+      }
+      ma20SeriesRef.current.setData(ma20Data);
+    }
+
+    // Only fit content on initial data load if timeScale hasn't been panned/zoomed
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent();
+    }
+  }, [candles]);
+
+  // 4. Update Price Lines (Pivot, T1, SL) dynamically without resetting chart view
+  const pivotBuy = vcpData?.pivot_buy_point;
+  const target1 = tradePlan?.target_1_price || tradePlan?.target_1;
+  const target2 = tradePlan?.target_2_price || tradePlan?.target_2;
+  const stopLoss = tradePlan?.stop_loss_price;
+
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+    const series = candleSeriesRef.current;
+
+    // Clear existing price lines
+    priceLinesRef.current.forEach((line) => {
+      try {
+        series.removePriceLine(line);
+      } catch (e) {}
+    });
+    priceLinesRef.current = [];
+
+    if (!showOverlays) return;
+
+    // Pivot Line
+    if (pivotBuy) {
+      const line = series.createPriceLine({
+        price: pivotBuy,
+        color: '#06b6d4',
+        lineWidth: 1.5,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: 'PIVOT'
+      });
+      priceLinesRef.current.push(line);
+    }
+
+    // Target 1 Line
+    if (target1) {
+      const line = series.createPriceLine({
+        price: target1,
+        color: '#10b981',
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
+        title: 'T1'
+      });
+      priceLinesRef.current.push(line);
+    }
+
+    // Target 2 Line
+    if (target2) {
+      const line = series.createPriceLine({
+        price: target2,
+        color: '#34d399',
+        lineWidth: 1,
+        lineStyle: 1,
+        axisLabelVisible: true,
+        title: 'T2'
+      });
+      priceLinesRef.current.push(line);
+    }
+
+    // Stop Loss Line
+    if (stopLoss) {
+      const line = series.createPriceLine({
+        price: stopLoss,
+        color: '#ef4444',
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: 'SL'
+      });
+      priceLinesRef.current.push(line);
+    }
+  }, [showOverlays, pivotBuy, target1, target2, stopLoss]);
+
+  const handleResetZoom = () => {
+    if (chartRef.current) {
+      chartRef.current.timeScale().fitContent();
+    }
+  };
 
   const latestCandle = candles[candles.length - 1];
   const displayO = hoverData?.open ?? latestCandle?.open;
@@ -287,6 +327,16 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
           >
             {showOverlays ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
             <span>{showOverlays ? 'Pivot & SL On' : 'Clean Price Only'}</span>
+          </button>
+
+          {/* Reset Zoom Button */}
+          <button
+            onClick={handleResetZoom}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#141a29] hover:bg-[#1e273d] border border-[#222b40] text-gray-400 hover:text-white transition-all"
+            title="Reset chart zoom to fit all candles"
+          >
+            <RotateCcw className="w-3 h-3 text-gray-400" />
+            <span>Reset Zoom</span>
           </button>
         </div>
 
