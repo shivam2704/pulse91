@@ -6,6 +6,7 @@ import StockConfluenceCard from './components/StockConfluenceCard';
 import DematPortfolioModal from './components/DematPortfolioModal';
 import OrderExecutionModal from './components/OrderExecutionModal';
 import WhatsAppPreviewModal from './components/WhatsAppPreviewModal';
+import WhatsAppConfigModal from './components/WhatsAppConfigModal';
 import ConnectBrokerModal from './components/ConnectBrokerModal';
 import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
 import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart } from 'lucide-react';
@@ -50,7 +51,25 @@ export default function App() {
   const [orderModalStock, setOrderModalStock] = useState(null);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [whatsAppModalStock, setWhatsAppModalStock] = useState(null);
+  const [isWhatsAppConfigOpen, setIsWhatsAppConfigOpen] = useState(false);
+  const [whatsAppPhone, setWhatsAppPhone] = useState(localStorage.getItem('pulse91_whatsapp_phone') || '');
   const [isDeepDiveModalOpen, setIsDeepDiveModalOpen] = useState(false);
+
+  // Sync WhatsApp config on mount
+  useEffect(() => {
+    fetch('/api/v1/alerts/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.phone_number && data.phone_number !== '+919876543210') {
+          setWhatsAppPhone(data.phone_number);
+          localStorage.setItem('pulse91_whatsapp_phone', data.phone_number);
+        } else {
+          const saved = localStorage.getItem('pulse91_whatsapp_phone');
+          if (saved) setWhatsAppPhone(saved);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
@@ -260,6 +279,8 @@ export default function App() {
       <HeaderNavbar
         market={market}
         demat={demat}
+        whatsAppPhone={whatsAppPhone}
+        onOpenWhatsAppModal={() => setIsWhatsAppConfigOpen(true)}
         onOpenDemat={() => setIsDematModalOpen(true)}
         onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
         onToggleMode={handleToggleMode}
@@ -618,6 +639,13 @@ export default function App() {
         onClose={() => setIsWhatsAppModalOpen(false)}
         stock={whatsAppModalStock}
         onSendWhatsApp={handleSendWhatsApp}
+      />
+
+      <WhatsAppConfigModal
+        isOpen={isWhatsAppConfigOpen}
+        onClose={() => setIsWhatsAppConfigOpen(false)}
+        currentPhone={whatsAppPhone}
+        onUpdatePhone={(phone) => setWhatsAppPhone(phone)}
       />
 
       {/* Footer */}
