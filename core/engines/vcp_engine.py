@@ -13,7 +13,7 @@ class MinerviniVCPEngine:
     and 8-Point Stage 2 Trend Template.
     """
 
-    def evaluate_trend_template(self, ltp: float, sym_hash: int) -> Dict[str, Any]:
+    def evaluate_trend_template(self, ltp: float, sym_hash: int, tech_mode: str = "STAGE_2_LEADER") -> Dict[str, Any]:
         """
         Minervini 8-Point Trend Template:
         1. Price > 150-day & 200-day EMA
@@ -25,29 +25,60 @@ class MinerviniVCPEngine:
         7. Price within 25% of 52-week high
         8. Relative Strength Rank >= 70
         """
-        ema_50 = round(ltp * (0.965 + (sym_hash % 10) * 0.002), 2)
-        ema_150 = round(ltp * (0.930 + (sym_hash % 15) * 0.002), 2)
-        ema_200 = round(ltp * (0.895 + (sym_hash % 20) * 0.002), 2)
-        
-        low_52w = round(ltp * (0.62 + (sym_hash % 10) * 0.01), 2)
-        high_52w = round(ltp * (1.04 + (sym_hash % 8) * 0.01), 2)
-        
-        pct_above_low = round(((ltp - low_52w) / low_52w) * 100, 1)
-        pct_from_high = round(((high_52w - ltp) / high_52w) * 100, 1)
-        
-        rs_rank = min(99, 72 + (sym_hash % 26))
+        if tech_mode == "STAGE_2_LEADER":
+            ema_50 = round(ltp * 0.940, 2)
+            ema_150 = round(ltp * 0.900, 2)
+            ema_200 = round(ltp * 0.860, 2)
+            low_52w = round(ltp * 0.65, 2)
+            high_52w = round(ltp * 1.05, 2)
+            rs_rank = min(99, 82 + (sym_hash % 16))
+            criteria = {
+                "c1_price_above_150_200": True,
+                "c2_150_above_200": True,
+                "c3_200_trending_up": True,
+                "c4_50_above_150_200": True,
+                "c5_price_above_50": True,
+                "c6_price_30pct_above_52w_low": True,
+                "c7_price_within_25pct_52w_high": True,
+                "c8_rs_rank_above_70": True
+            }
+        elif tech_mode == "STAGE_1_CONSOLIDATION":
+            ema_50 = round(ltp * 0.985, 2)
+            ema_150 = round(ltp * 0.950, 2)
+            ema_200 = round(ltp * 0.920, 2)
+            low_52w = round(ltp * 0.75, 2)
+            high_52w = round(ltp * 1.18, 2)
+            rs_rank = 60 + (sym_hash % 14)
+            criteria = {
+                "c1_price_above_150_200": True,
+                "c2_150_above_200": True,
+                "c3_200_trending_up": True,
+                "c4_50_above_150_200": True,
+                "c5_price_above_50": ltp > ema_50,
+                "c6_price_30pct_above_52w_low": False,
+                "c7_price_within_25pct_52w_high": True,
+                "c8_rs_rank_above_70": rs_rank >= 70
+            }
+        else: # STAGE_4_LAGGARD
+            ema_50 = round(ltp * 1.070, 2)
+            ema_150 = round(ltp * 1.110, 2)
+            ema_200 = round(ltp * 1.150, 2)
+            low_52w = round(ltp * 0.92, 2)
+            high_52w = round(ltp * 1.45, 2)
+            rs_rank = 25 + (sym_hash % 25)
+            criteria = {
+                "c1_price_above_150_200": False,
+                "c2_150_above_200": False,
+                "c3_200_trending_up": False,
+                "c4_50_above_150_200": False,
+                "c5_price_above_50": False,
+                "c6_price_30pct_above_52w_low": False,
+                "c7_price_within_25pct_52w_high": False,
+                "c8_rs_rank_above_70": False
+            }
 
-        criteria = {
-            "c1_price_above_150_200": ltp > ema_150 and ltp > ema_200,
-            "c2_150_above_200": ema_150 > ema_200,
-            "c3_200_trending_up": True,
-            "c4_50_above_150_200": ema_50 > ema_150 and ema_50 > ema_200,
-            "c5_price_above_50": ltp > ema_50,
-            "c6_price_30pct_above_52w_low": pct_above_low >= 30.0,
-            "c7_price_within_25pct_52w_high": pct_from_high <= 25.0,
-            "c8_rs_rank_above_70": rs_rank >= 70
-        }
-
+        pct_above_low = round(((ltp - low_52w) / max(1, low_52w)) * 100, 1)
+        pct_from_high = round(((high_52w - ltp) / max(1, high_52w)) * 100, 1)
         passed_count = sum(1 for v in criteria.values() if v)
         is_stage_2 = passed_count >= 7
 
@@ -63,14 +94,14 @@ class MinerviniVCPEngine:
             "criteria_breakdown": criteria
         }
 
-    def detect_vcp_pattern(self, symbol: str, ltp: float, sym_hash: int) -> Dict[str, Any]:
+    def detect_vcp_pattern(self, symbol: str, ltp: float, sym_hash: int, tech_mode: str = "STAGE_2_LEADER") -> Dict[str, Any]:
         """
         Detects Volatility Contraction Pattern (VCP):
         Successive wave contractions: T1 (12-18%) -> T2 (6-9%) -> T3 (2-4%)
         with dry volume on the final contraction near the pivot breakout point.
         """
         # Determine if ticker exhibits VCP contraction geometry
-        has_vcp = (sym_hash % 3 != 0)
+        has_vcp = (tech_mode == "STAGE_2_LEADER") or (tech_mode == "STAGE_1_CONSOLIDATION" and sym_hash % 3 == 0)
         
         if has_vcp:
             c1 = 14.5 + (sym_hash % 5)

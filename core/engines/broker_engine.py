@@ -16,9 +16,9 @@ from .whatsapp_alerter import whatsapp_alerter
 class BrokerEngine:
     def __init__(self):
         self.market_data = market_data_engine
-        self.active_mode = "LIVE_DEMAT" # Default to LIVE_DEMAT since Groww is configured!
-        self.broker_name = "Groww"
-        self.account_id = "GROWW-LIVE-DEMAT"
+        self.active_mode = "SANDBOX" # Default to Sandbox (Virtual Demat) for security!
+        self.broker_name = "Pulse91 Sandbox Broker"
+        self.account_id = "PULSE91-DEMAT-SBX-01"
 
         # Sandbox Virtual State
         self.initial_balance = 1000000.00 # ₹10,00,000 INR
@@ -121,12 +121,13 @@ class BrokerEngine:
 
         for h in active_holdings:
             sym = h["symbol"]
-            ltp = self.market_data.get_live_price(sym)
+            avg_buy = h.get("avg_buy_price", 100.0)
+            ltp = self.market_data.get_live_price(sym, fallback_price=avg_buy)
             qty = h["quantity"]
             curr_val = round(ltp * qty, 2)
             invested = h["invested_value"]
             pnl = round(curr_val - invested, 2)
-            pnl_pct = round((pnl / invested) * 100, 2)
+            pnl_pct = round((pnl / max(0.01, invested)) * 100, 2)
             
             # Simulated day change
             day_change = round(curr_val * 0.0085, 2)

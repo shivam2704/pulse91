@@ -8,6 +8,8 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
   const candleSeriesRef = useRef(null);
   const volumeSeriesRef = useRef(null);
   const ma20SeriesRef = useRef(null);
+  const ma50SeriesRef = useRef(null);
+  const ma200SeriesRef = useRef(null);
   const priceLinesRef = useRef([]);
   const initialFitDoneRef = useRef(false);
 
@@ -17,14 +19,14 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
   const [hoverData, setHoverData] = useState(null);
   const [showOverlays, setShowOverlays] = useState(true);
 
-  // 1. Fetch candle data whenever symbol or timeframe changes
+  // 1. Fetch candle data whenever symbol or timeframe changes (loads full 1-year history: 250 daily bars)
   useEffect(() => {
     if (!symbol) return;
     initialFitDoneRef.current = false; // Reset fit lock on symbol or timeframe switch
     let isMounted = true;
     setLoading(true);
 
-    fetch(`/api/v1/scan/candles/${symbol}?timeframe=${timeframe}&count=60`)
+    fetch(`/api/v1/scan/candles/${symbol}?timeframe=${timeframe}`)
       .then((res) => res.json())
       .then((data) => {
         if (isMounted && data.success && data.candles) {
@@ -115,13 +117,27 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
       });
       volumeSeriesRef.current = volumeSeries;
 
-      // 20-DMA Line Series
+      // Moving Average Series (Institutional Multi-Timeframe Alignment)
       const ma20Series = chart.addSeries(LineSeries, {
         color: '#f59e0b',
         lineWidth: 1.5,
         title: '20-SMA'
       });
       ma20SeriesRef.current = ma20Series;
+
+      const ma50Series = chart.addSeries(LineSeries, {
+        color: '#38bdf8',
+        lineWidth: 1.5,
+        title: '50-SMA'
+      });
+      ma50SeriesRef.current = ma50Series;
+
+      const ma200Series = chart.addSeries(LineSeries, {
+        color: '#a855f7',
+        lineWidth: 1.5,
+        title: '200-SMA'
+      });
+      ma200SeriesRef.current = ma200Series;
 
       // Crosshair Hover Listener
       chart.subscribeCrosshairMove((param) => {
@@ -186,19 +202,63 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
     candleSeriesRef.current.setData(formattedCandles);
     volumeSeriesRef.current.setData(formattedVolumes);
 
-    if (ma20SeriesRef.current && formattedCandles.length > 20) {
-      const ma20Data = [];
-      for (let i = 19; i < formattedCandles.length; i++) {
-        const slice = formattedCandles.slice(i - 19, i + 1);
-        const avg = slice.reduce((acc, curr) => acc + curr.close, 0) / 20;
-        ma20Data.push({ time: formattedCandles[i].time, value: Number(avg.toFixed(2)) });
+    // 20-DMA (Orange) - full span from Day 1
+    if (ma20SeriesRef.current) {
+      const ma20Data = sorted
+        .filter((c) => c.ma20 != null)
+        .map((c) => ({ time: c.time, value: c.ma20 }));
+      if (ma20Data.length > 0) {
+        ma20SeriesRef.current.setData(ma20Data);
+      } else if (formattedCandles.length >= 20) {
+        const fallback = [];
+        for (let i = 19; i < formattedCandles.length; i++) {
+          const slice = formattedCandles.slice(i - 19, i + 1);
+          const avg = slice.reduce((acc, curr) => acc + curr.close, 0) / 20;
+          fallback.push({ time: formattedCandles[i].time, value: Number(avg.toFixed(2)) });
+        }
+        ma20SeriesRef.current.setData(fallback);
       }
-      ma20SeriesRef.current.setData(ma20Data);
     }
 
-    // Only fit content on INITIAL data load per symbol/timeframe so user zoom/pan is never wiped!
+    // 50-DMA (Cyan) - full span from Day 1
+    if (ma50SeriesRef.current) {
+      const ma50Data = sorted
+        .filter((c) => c.ma50 != null)
+        .map((c) => ({ time: c.time, value: c.ma50 }));
+      if (ma50Data.length > 0) {
+        ma50SeriesRef.current.setData(ma50Data);
+      } else if (formattedCandles.length >= 50) {
+        const fallback = [];
+        for (let i = 49; i < formattedCandles.length; i++) {
+          const slice = formattedCandles.slice(i - 49, i + 1);
+          const avg = slice.reduce((acc, curr) => acc + curr.close, 0) / 50;
+          fallback.push({ time: formattedCandles[i].time, value: Number(avg.toFixed(2)) });
+        }
+        ma50SeriesRef.current.setData(fallback);
+      }
+    }
+
+    // 200-DMA (Purple) - continuous full span across entire chart
+    if (ma200SeriesRef.current) {
+      const ma200Data = sorted
+        .filter((c) => c.ma200 != null && c.ma200 > (c.close * 0.4))
+        .map((c) => ({ time: c.time, value: c.ma200 }));
+      if (ma200Data.length > 0) {
+        ma200SeriesRef.current.setData(ma200Data);
+      } else {
+        ma200SeriesRef.current.setData([]);
+      }
+    }
+
+    // Set initial visible range to the latest ~75 bars so the immediate pivot is crisp and detailed,
+    // while providing full 1-year (250 bars) historical scrollback!
     if (chartRef.current && !initialFitDoneRef.current && formattedCandles.length > 0) {
-      chartRef.current.timeScale().fitContent();
+      const total = formattedCandles.length;
+      const visibleCount = Math.min(75, total);
+      chartRef.current.timeScale().setVisibleLogicalRange({
+        from: total - visibleCount,
+        to: total
+      });
       initialFitDoneRef.current = true;
     }
   }, [candles]);
@@ -384,10 +444,18 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2 mt-2 border-t border-[#141b2b] text-[10px] text-gray-400">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
-            <span className="w-2 h-0.5 bg-[#f59e0b] rounded"></span> 20-DMA
+            <span className="w-2 h-0.5 bg-[#f59e0b] rounded"></span> {timeframe === 'D' ? '20-DMA' : (timeframe === 'W' ? '20-WMA' : '20-SMA')}
           </span>
           <span className="flex items-center gap-1">
-            <span className="w-2 h-0.5 bg-[#06b6d4] border-t border-dashed border-[#06b6d4]"></span> VCP Breakout Pivot
+            <span className="w-2 h-0.5 bg-[#38bdf8] rounded"></span> {timeframe === 'D' ? '50-DMA' : (timeframe === 'W' ? '50-WMA' : '50-SMA')}
+          </span>
+          {timeframe !== 'W' && (
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-0.5 bg-[#a855f7] rounded"></span> {timeframe === 'D' ? '200-DMA' : '200-SMA'}
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-0.5 bg-[#06b6d4] border-t border-dashed border-[#06b6d4]"></span> VCP Pivot
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-0.5 bg-[#10b981] border-t border-dotted border-[#10b981]"></span> Target 1

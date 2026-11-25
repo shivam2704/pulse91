@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 
 class WhatsAppAlerter:
     def __init__(self):
-        self.default_phone = "+919876543210"
+        self.default_phone: Optional[str] = None
         self.webhook_url = None
         self.alerts_log = []
 
@@ -115,6 +115,14 @@ class WhatsAppAlerter:
         Synchronous and thread-safe for both fast in-memory execution and webhook integration.
         """
         target_phone = phone_number or self.default_phone
+        if not target_phone:
+            return {
+                "success": False,
+                "channel": "WhatsApp",
+                "recipient": None,
+                "message": "WhatsApp number not linked. Please configure in settings."
+            }
+
         target_webhook = webhook_url or self.webhook_url
 
         log_entry = {

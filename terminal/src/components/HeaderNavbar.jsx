@@ -14,43 +14,40 @@ export default function HeaderNavbar({
   const isSandbox = demat.mode === 'SANDBOX';
 
   return (
-    <header className="bg-[#0b0f19] border-b border-[#1b2336] sticky top-0 z-40 px-4 py-2.5">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+    <header className="bg-[#0b0f19] border-b border-[#1b2336] sticky top-0 z-40 px-3 sm:px-6 py-2.5">
+      <div className="w-full max-w-[1850px] mx-auto flex items-center justify-between gap-3 overflow-x-auto no-scrollbar">
         {/* Brand & Market Session */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center font-bold text-emerald-400 tracking-wider">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center font-bold text-xs text-emerald-400 tracking-wider">
               91
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-lg text-white tracking-tight">PULSE91</span>
-                <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-[#1e2638] text-gray-400">
-                  Dalal Street Quant
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-500">Minervini VCP • CANSLIM • Demat Gateway</p>
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="font-bold text-base text-white tracking-tight">PULSE91</span>
+              <span className="text-[10px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded bg-[#1e2638] text-gray-400">
+                Quant
+              </span>
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#1f2738] text-xs">
-            <span className={`w-2 h-2 rounded-full ${
+          <div className="hidden md:flex items-center gap-2 pl-3 border-l border-[#1f2738] text-xs whitespace-nowrap">
+            <span className={`w-2 h-2 rounded-full shrink-0 ${
               market.is_market_open ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'
             }`}></span>
             <span className={`font-medium ${market.is_market_open ? 'text-emerald-400' : 'text-gray-400'}`}>
-              {market.is_market_open ? 'NSE/BSE LIVE' : 'NSE/BSE CLOSED'}
+              {market.is_market_open ? 'NSE LIVE' : 'NSE CLOSED'}
             </span>
             <span className="text-gray-600">|</span>
-            <span className="font-mono text-gray-400">
+            <span className="font-mono text-gray-400 text-[11px]">
               {market.is_market_open ? '09:15 - 15:30 IST' : 'Opens 09:15 AM'}
             </span>
           </div>
         </div>
 
         {/* Live Index Tickers */}
-        <div className="flex items-center gap-6 text-xs">
+        <div className="hidden lg:flex items-center gap-3 text-xs whitespace-nowrap shrink-0">
           <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
-            <span className="text-gray-400 font-semibold">NIFTY 50</span>
+            <span className="text-gray-400 font-semibold text-[11px]">NIFTY 50</span>
             <span className="font-mono font-bold text-white">
               {market.nifty_50 ? market.nifty_50.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '24,280.50'}
             </span>
@@ -59,8 +56,8 @@ export default function HeaderNavbar({
             </span>
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
-            <span className="text-gray-400 font-semibold">FII/DII FLOW</span>
+          <div className="hidden xl:flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
+            <span className="text-gray-400 font-semibold text-[11px]">FII/DII FLOW</span>
             <span className="font-mono text-emerald-400 font-medium">
               +{market.fii_dii_cr || '1,850'} Cr
             </span>
@@ -68,11 +65,11 @@ export default function HeaderNavbar({
         </div>
 
         {/* Demat Connect, WhatsApp Notifications & Portfolio Stats */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
           {/* Interactive WhatsApp Alerts Gateway Link */}
           <button
             onClick={onOpenWhatsAppModal}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all whitespace-nowrap shrink-0 ${
               whatsAppPhone
                 ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
                 : 'bg-[#121824] hover:bg-[#1a2336] border-[#1e2638] text-gray-300 hover:text-white'
@@ -82,9 +79,9 @@ export default function HeaderNavbar({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
             <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
             <span className="font-semibold">
-              {whatsAppPhone ? `WhatsApp: ${whatsAppPhone}` : 'Link WhatsApp'}
+              {whatsAppPhone ? 'WhatsApp' : 'Link WhatsApp'}
             </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#162235] text-emerald-400 border border-emerald-500/20 uppercase font-sans">
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#162235] text-emerald-400 border border-emerald-500/20 uppercase font-sans">
               {whatsAppPhone ? 'Active' : 'Setup'}
             </span>
           </button>
@@ -92,7 +89,7 @@ export default function HeaderNavbar({
           {/* Connect Broker Button */}
           <button
             onClick={onOpenConnectBroker}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all whitespace-nowrap shrink-0 ${
               isSandbox
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20'
                 : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20'
@@ -100,26 +97,25 @@ export default function HeaderNavbar({
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>{isSandbox ? 'Sandbox (₹10L)' : `Live (${demat.broker || 'Groww'})`}</span>
-            <span className="text-[10px] text-gray-400 underline ml-0.5 font-normal">Connect</span>
           </button>
 
           {/* Demat Portfolio Pill */}
           <button
             onClick={onOpenDemat}
-            className="flex items-center gap-2 bg-[#141a29] hover:bg-[#1a2336] border border-[#222b40] px-3 py-1.5 rounded-lg text-xs transition-colors"
+            className="flex items-center gap-2 bg-[#141a29] hover:bg-[#1a2336] border border-[#222b40] px-3 py-1.5 rounded-lg text-xs transition-colors whitespace-nowrap shrink-0"
           >
             <Wallet className="w-3.5 h-3.5 text-gray-400" />
-            <div className="text-left">
-              <span className="text-[10px] text-gray-400 block leading-tight">DEMAT WORTH</span>
-              <span className="font-mono font-bold text-white text-xs">
-                ₹{demat.net_worth ? demat.net_worth.toLocaleString('en-IN') : '10,00,000'}
+            <div className="flex items-center gap-1.5 font-mono">
+              <span className="text-[11px] text-gray-400">Demat:</span>
+              <span className="font-bold text-white text-xs">
+                ₹{demat.net_worth ? Math.round(demat.net_worth).toLocaleString('en-IN') : '10,00,000'}
+              </span>
+              <span className={`text-[11px] font-medium ${
+                (demat.unrealized_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                ({(demat.unrealized_pnl || 0) >= 0 ? '+' : ''}₹{Math.round(demat.unrealized_pnl || 0).toLocaleString('en-IN')})
               </span>
             </div>
-            <span className={`text-[11px] font-mono font-medium pl-1 ${
-              (demat.unrealized_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-            }`}>
-              {(demat.unrealized_pnl || 0) >= 0 ? '+' : ''}₹{Math.round(demat.unrealized_pnl || 0).toLocaleString('en-IN')}
-            </span>
           </button>
         </div>
       </div>

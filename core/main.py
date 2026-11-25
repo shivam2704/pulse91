@@ -6,6 +6,11 @@ Pulse91 - Dalal Street Intelligent Quant Terminal & Demat Gateway Server
 import asyncio
 import json
 import datetime
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 

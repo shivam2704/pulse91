@@ -3,22 +3,26 @@ pulse91/backend/engines/groww_adapter.py
 Live Groww Trade API Integration using official growwapi SDK
 """
 
+import os
 import time
 from typing import Dict, List, Any, Optional
 from growwapi import GrowwAPI
 
 class GrowwTradeApiAdapter:
     def __init__(self):
-        self.api_key = "eyJraWQiOiJaTUtjVXciLCJhbGciOiJFUzI1NiJ9.eyJleHAiOjI1ODM5NDA1NjEsImlhdCI6MTc5NTU0MDU2MSwibmJmIjoxNzk1NTQwNTYxLCJzdWIiOiJ7XCJ0b2tlblJlZklkXCI6XCI3NjEzMTAzOC1hYTJkLTRlZTgtOWQ5OS02NDMwZmJmMzRiNzVcIixcInZlbmRvckludGVncmF0aW9uS2V5XCI6XCJlMzFmZjIzYjA4NmI0MDZjODg3NGIyZjZkODQ5NTMxM1wiLFwidXNlckFjY291bnRJZFwiOlwiZDZjMzI4NmEtZDQ5ZS00ZWMyLTkxZTgtMmEwNDU5YWNiMzlhXCIsXCJkZXZpY2VJZFwiOlwiNjUzYjE0NjUtMTI2My01YWRkLWFhOTctNDhlOTIzZTQyZTVhXCIsXCJzZXNzaW9uSWRcIjpcIjhjNThhNzZjLTc2MDEtNDczMy04YWJhLTFiODhlNTdmYjIxOVwiLFwiYWRkaXRpb25hbERhdGFcIjpcIno1NC9NZzltdjE2WXdmb0gvS0EwYkh2ZHR2MnhwQUdVZkl3Y0xDa3F3VzFSTkczdTlLa2pWZDNoWjU1ZStNZERhWXBOVi9UOUxIRmtQejFFQisybTdRPT1cIixcInJvbGVcIjpcImF1dGgtdG90cFwiLFwic291cmNlSXBBZGRyZXNzXCI6XCIxNTIuNTguMTA3LjEyMCwxMDQuMjMuMjE2LjI0NiwzNS4yNDEuMjMuMTIzXCIsXCJ0d29GYUV4cGlyeVRzXCI6MjU4Mzk0MDU2MTYyOCxcInZlbmRvck5hbWVcIjpcImdyb3d3QXBpXCJ9IiwiaXNzIjoiYXBleC1hdXRoLXByb2QtYXBwIn0.yPP9SlcULTpoO_XckUNgifzmw-5fg6x4AHbsJnRIlr40wuwdrDzQAAPVXC9WKiWHr8Jjt4JGSyfzuiKK1eh8HQ"
-        self.secret = "7t^nZHGBB&6MwdG1FmMXCe$GwPd&1&PB"
+        # Read securely from local environment variables only (never hardcoded in source!)
+        self.api_key: Optional[str] = os.getenv("GROWW_API_KEY")
+        self.secret: Optional[str] = os.getenv("GROWW_API_SECRET")
         self.access_token: Optional[str] = None
         self.token_expiry: float = 0
         self.client: Optional[GrowwAPI] = None
         self.last_known_holdings: List[Dict[str, Any]] = []
-        self.last_known_cash: float = 2745.01
+        self.last_known_cash: float = 0.0
 
     def get_client(self) -> GrowwAPI:
         """Initializes or refreshes the live authenticated GrowwAPI client."""
+        if not self.api_key or not self.secret:
+            raise ValueError("Groww credentials not set. Please configure GROWW_API_KEY and GROWW_API_SECRET in your private .env file.")
         now = time.time()
         if not self.client or not self.access_token or now >= self.token_expiry:
             try:

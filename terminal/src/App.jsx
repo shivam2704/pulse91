@@ -9,7 +9,7 @@ import WhatsAppPreviewModal from './components/WhatsAppPreviewModal';
 import WhatsAppConfigModal from './components/WhatsAppConfigModal';
 import ConnectBrokerModal from './components/ConnectBrokerModal';
 import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
-import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart } from 'lucide-react';
+import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [market, setMarket] = useState({
@@ -40,6 +40,7 @@ export default function App() {
   const [isScanningIndex, setIsScanningIndex] = useState(false);
   const [isRefreshingMonday, setIsRefreshingMonday] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchError, setSearchError] = useState(null);
   const [activeMainTab, setActiveMainTab] = useState('MONDAY_WATCHLIST');
   const [layoutMode, setLayoutMode] = useState('SPLIT_SCREEN'); // 'SPLIT_SCREEN' or 'STACKED'
   const [autotrader, setAutotrader] = useState(null);
@@ -54,6 +55,7 @@ export default function App() {
   const [isWhatsAppConfigOpen, setIsWhatsAppConfigOpen] = useState(false);
   const [whatsAppPhone, setWhatsAppPhone] = useState(localStorage.getItem('pulse91_whatsapp_phone') || '');
   const [isDeepDiveModalOpen, setIsDeepDiveModalOpen] = useState(false);
+  const [orderToast, setOrderToast] = useState(null);
 
   // Sync WhatsApp config on mount
   useEffect(() => {
@@ -134,6 +136,7 @@ export default function App() {
 
   const fetchStockEvaluation = async (symbol, openModal = true) => {
     try {
+      setSearchError(null);
       const res = await fetch(`/api/v1/scan/stock/${symbol}`);
       if (res.ok) {
         const json = await res.json();
@@ -141,6 +144,10 @@ export default function App() {
           setSelectedStock(json.data);
           if (openModal) setIsDeepDiveModalOpen(true);
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setSearchError(errJson.detail || `Ticker '${symbol}' not recognized on NSE.`);
+        setTimeout(() => setSearchError(null), 5000);
       }
     } catch (e) {
       console.warn('Stock eval error:', e.message);
@@ -163,8 +170,18 @@ export default function App() {
     }
   };
 
+  const filteredIndexRankings = (indexScanResult?.rankings || []).filter((stock) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      stock.symbol?.toLowerCase().includes(q) ||
+      stock.company_name?.toLowerCase().includes(q) ||
+      stock.sector?.toLowerCase().includes(q)
+    );
+  });
+
   const currentList = activeMainTab === 'INDEX_SCAN'
-    ? (indexScanResult?.rankings || [])
+    ? filteredIndexRankings
     : (mondayData?.picks || []);
 
   const currentIndex = currentList.findIndex((s) => s.symbol === selectedStock?.symbol);
@@ -179,9 +196,58 @@ export default function App() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      fetchStockEvaluation(searchQuery.trim().toUpperCase());
+    const query = searchQuery.trim().toUpperCase();
+    if (!query) return;
+
+    // Direct routing for Index keywords to the Index Scanner
+    const indexAliases = {
+      'SMALLCAP': 'NIFTY_SMALLCAP_100',
+      'SMALLCAP 100': 'NIFTY_SMALLCAP_100',
+      'NIFTY SMALLCAP': 'NIFTY_SMALLCAP_100',
+      'NIFTY_SMALLCAP_100': 'NIFTY_SMALLCAP_100',
+      'MIDCAP': 'NIFTY_MIDCAP_100',
+      'MIDCAP 100': 'NIFTY_MIDCAP_100',
+      'NIFTY MIDCAP': 'NIFTY_MIDCAP_100',
+      'NIFTY_MIDCAP_100': 'NIFTY_MIDCAP_100',
+      'NIFTY 50': 'NIFTY_50',
+      'NIFTY': 'NIFTY_50',
+      'NIFTY50': 'NIFTY_50',
+      'NIFTY_50': 'NIFTY_50',
+      'NEXT 50': 'NIFTY_NEXT_50',
+      'NEXT50': 'NIFTY_NEXT_50',
+      'NIFTY NEXT 50': 'NIFTY_NEXT_50',
+      'NIFTY_NEXT_50': 'NIFTY_NEXT_50',
+      'BANK': 'NIFTY_BANK',
+      'BANKNIFTY': 'NIFTY_BANK',
+      'NIFTY BANK': 'NIFTY_BANK',
+      'NIFTY_BANK': 'NIFTY_BANK',
+      'IT': 'NIFTY_IT',
+      'NIFTY IT': 'NIFTY_IT',
+      'NIFTY_IT': 'NIFTY_IT',
+      'AUTO': 'NIFTY_AUTO',
+      'NIFTY AUTO': 'NIFTY_AUTO',
+      'NIFTY_AUTO': 'NIFTY_AUTO',
+      'PHARMA': 'NIFTY_PHARMA',
+      'NIFTY PHARMA': 'NIFTY_PHARMA',
+      'NIFTY_PHARMA': 'NIFTY_PHARMA',
+      'METAL': 'NIFTY_METAL',
+      'NIFTY METAL': 'NIFTY_METAL',
+      'NIFTY_METAL': 'NIFTY_METAL',
+      'FMCG': 'NIFTY_FMCG',
+      'NIFTY FMCG': 'NIFTY_FMCG',
+      'NIFTY_FMCG': 'NIFTY_FMCG',
+    };
+
+    if (indexAliases[query]) {
+      const targetIndex = indexAliases[query];
+      setSelectedIndex(targetIndex);
+      setActiveMainTab('INDEX_SCAN');
+      handleScanIndex(targetIndex);
+      return;
     }
+
+    // Direct Stock Ticker Deep-Dive
+    fetchStockEvaluation(query, true);
   };
 
   const handleToggleMode = async (selectedBroker = 'Groww') => {
@@ -209,12 +275,33 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload)
       });
-      if (res.ok) {
-        setIsOrderModalOpen(false);
+      const data = await res.json();
+      if (res.ok && data.success) {
         fetchDemat();
         fetchAutotraderStatus();
+        const price = data.order?.price || orderPayload.price;
+        setOrderToast({
+          type: 'BUY',
+          symbol: orderPayload.symbol,
+          quantity: orderPayload.quantity,
+          price: price,
+          targetPrice: orderPayload.target_price,
+          slPrice: orderPayload.sl_price,
+          message: `Order Filled: BUY ${orderPayload.quantity} ${orderPayload.symbol} @ ₹${price?.toFixed(2)}`
+        });
+        setTimeout(() => setOrderToast(null), 8000);
+        return {
+          success: true,
+          order_id: data.order?.order_id,
+          broker: demat.broker || 'SANDBOX DEMAT',
+          price: price
+        };
+      } else {
+        return { success: false, detail: data.detail || 'Execution failed' };
       }
-    } catch (e) {}
+    } catch (e) {
+      return { success: false, detail: e.message || 'Execution error' };
+    }
   };
 
   const handleExitPosition = async (symbol) => {
@@ -224,9 +311,16 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ symbol })
       });
+      const data = await res.json();
       if (res.ok) {
         fetchDemat();
         fetchAutotraderStatus();
+        setOrderToast({
+          type: 'EXIT',
+          symbol,
+          message: `Position Squared Off: Sold ${symbol} at Market Price`
+        });
+        setTimeout(() => setOrderToast(null), 6000);
       }
     } catch (e) {}
   };
@@ -286,6 +380,47 @@ export default function App() {
         onToggleMode={handleToggleMode}
       />
 
+      {/* Floating Order Execution Toast */}
+      {orderToast && (
+        <div className="fixed top-16 right-6 z-50 animate-bounce-in max-w-md w-full bg-[#0d1626] border border-emerald-500/50 shadow-2xl rounded-xl p-4 flex items-start gap-3 backdrop-blur-md">
+          <div className={`p-2 rounded-lg shrink-0 ${orderToast.type === 'BUY' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-white text-xs uppercase tracking-wide">
+                {orderToast.type === 'BUY' ? 'Order Executed & Filled' : 'Position Squared Off'}
+              </span>
+              <button onClick={() => setOrderToast(null)} className="text-gray-400 hover:text-white text-xs">✕</button>
+            </div>
+            <p className="text-xs text-emerald-300 font-mono mt-1 font-semibold">{orderToast.message}</p>
+            {orderToast.targetPrice && (
+              <div className="flex items-center gap-2 mt-1.5 text-[10px] font-mono text-gray-300">
+                <span className="bg-[#121c2e] px-1.5 py-0.5 rounded border border-[#22334e] text-emerald-400">
+                  Target: ₹{orderToast.targetPrice.toFixed(2)}
+                </span>
+                <span className="bg-[#121c2e] px-1.5 py-0.5 rounded border border-[#22334e] text-rose-400">
+                  SL: ₹{orderToast.slPrice.toFixed(2)}
+                </span>
+                <span className="text-gray-400 ml-auto">Auto-Trader Active</span>
+              </div>
+            )}
+            <div className="mt-2 flex items-center justify-between pt-1.5 border-t border-[#1e2a3f] text-[10px]">
+              <span className="text-gray-400">Status: In Demat Portfolio</span>
+              <button
+                onClick={() => {
+                  setActiveMainTab('PORTFOLIO_POSITIONS');
+                  setOrderToast(null);
+                }}
+                className="text-blue-400 hover:text-blue-300 font-semibold underline flex items-center gap-1 cursor-pointer"
+              >
+                Go to Demat ➜
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 2. On-Demand Index Scanner Toolbar */}
       <IndexScannerBar
         selectedIndex={selectedIndex}
@@ -298,10 +433,24 @@ export default function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearchSubmit={handleSearchSubmit}
+        onSelectStock={(sym) => fetchStockEvaluation(sym, true)}
       />
 
+      {/* Search Error Notification Banner */}
+      {searchError && (
+        <div className="w-full max-w-[1850px] mx-auto px-3 sm:px-6 pt-3">
+          <div className="bg-amber-500/15 border border-amber-500/40 text-amber-300 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold uppercase tracking-wider bg-amber-500/30 px-1.5 py-0.5 rounded text-[10px]">NSE Notice</span>
+              <span>{searchError}</span>
+            </div>
+            <button onClick={() => setSearchError(null)} className="text-amber-400 hover:text-white font-bold ml-4">✕</button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+      <main className="flex-1 w-full max-w-[1850px] mx-auto p-3 sm:p-5 md:p-6 space-y-6">
         {/* Top Control Bar: Active Tab (Scanner vs Monday Watchlist) */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1b2336] pb-3">
           <div className="flex items-center gap-2">
@@ -364,6 +513,7 @@ export default function App() {
         {activeMainTab === 'MONDAY_WATCHLIST' && (
           <MondayTop15Panel
             mondayData={mondayData}
+            searchQuery={searchQuery}
             onSelectStock={(sym) => fetchStockEvaluation(sym, true)}
             onOpenWhatsApp={(stock) => {
               setWhatsAppModalStock(stock);
@@ -447,7 +597,14 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#161d2d]">
-                    {indexScanResult?.rankings?.map((stock, idx) => {
+                    {filteredIndexRankings.length === 0 ? (
+                      <tr>
+                        <td colSpan="9" className="py-8 text-center text-gray-400">
+                          No stocks matching "{searchQuery}" found in {indexScanResult?.index_name || selectedIndex}.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredIndexRankings.map((stock, idx) => {
                       const score = stock.confluence_score;
                       const isStrong = stock.verdict === 'STRONG BUY';
                       const rank = idx + 1;
@@ -559,7 +716,7 @@ export default function App() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>
@@ -571,7 +728,10 @@ export default function App() {
         {activeMainTab === 'PORTFOLIO_POSITIONS' && (
           <PortfolioPositionsPanel
             demat={demat}
+            searchQuery={searchQuery}
             autotrader={autotrader}
+            whatsAppPhone={whatsAppPhone}
+            onOpenWhatsAppModal={() => setIsWhatsAppConfigOpen(true)}
             onToggleAutotrader={handleToggleAutotrader}
             onRunCycle={handleRunAutotraderCycle}
             onExitPosition={handleExitPosition}
@@ -632,6 +792,7 @@ export default function App() {
         stock={orderModalStock}
         onConfirmOrder={handleConfirmOrder}
         availableCash={demat.available_cash}
+        onViewDemat={() => setActiveMainTab('PORTFOLIO_POSITIONS')}
       />
 
       <WhatsAppPreviewModal

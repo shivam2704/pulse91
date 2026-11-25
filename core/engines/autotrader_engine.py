@@ -18,13 +18,15 @@ from .market_data import market_data_engine
 from .broker_engine import broker_engine
 from .whatsapp_alerter import whatsapp_alerter
 from .confluence_engine import confluence_engine
+from .index_scanner import IndexScannerEngine
 
 class AutoTraderEngine:
     def __init__(self):
         self.is_active: bool = False
         self.max_capital_per_trade: float = 50000.0 # ₹50,000 INR allocation per stock
         self.max_open_positions: int = 5
-        self.notification_phone: str = "+919876543210"
+        self.notification_phone: Optional[str] = None
+        self.index_scanner = IndexScannerEngine()
         
         # Track positions managed by the quant daemon
         # Key: symbol -> { entry_price, target_1, target_2, stop_loss, quantity, entry_time }
@@ -78,6 +80,29 @@ class AutoTraderEngine:
         if phone:
             self.notification_phone = phone
             whatsapp_alerter.set_config(phone=phone)
+
+    def register_position(self, symbol: str, quantity: int, entry_price: float, target_1: float, stop_loss: float, target_2: Optional[float] = None):
+        """
+        Registers a position into the autonomous quant daemon for continuous monitoring
+        and automatic exit upon reaching Target 1 (+5.55%) or Stop Loss (-2.78%).
+        """
+        sym = symbol.upper()
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.managed_positions[sym] = {
+            "symbol": sym,
+            "quantity": quantity,
+            "entry_price": entry_price,
+            "target_1": target_1,
+            "target_2": target_2 or round(entry_price * 1.0888, 2),
+            "stop_loss": stop_loss,
+            "entry_time": now_str
+        }
+
+    def unregister_position(self, symbol: str):
+        """
+        Removes a position when squared off manually.
+        """
+        self.managed_positions.pop(symbol.upper(), None)
 
     async def run_cycle(self) -> List[Dict[str, Any]]:
         """
@@ -205,8 +230,8 @@ class AutoTraderEngine:
         # 2. EVALUATE ENTRIES (MINERVINI VCP PIVOT BREAKOUTS)
         # -------------------------------------------------------------
         if len(self.managed_positions) < self.max_open_positions:
-            top_scan = confluence_engine.generate_monday_master_watchlist()
-            for pick in top_scan["picks"][:5]: # Top 5 highest conviction setups
+            top_scan = self.index_scanner.run_monday_8am_scan()
+            for pick in top_scan.get("rankings", [])[:5]: # Top 5 highest conviction setups
                 sym = pick["symbol"]
                 if sym in self.managed_positions:
                     continue

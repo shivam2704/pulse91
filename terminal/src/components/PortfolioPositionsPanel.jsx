@@ -3,7 +3,10 @@ import { Zap, Play, Pause, RefreshCw, ShieldAlert, Target, ShoppingBag, ArrowUpR
 
 export default function PortfolioPositionsPanel({
   demat,
+  searchQuery,
   autotrader,
+  whatsAppPhone,
+  onOpenWhatsAppModal,
   onToggleAutotrader,
   onRunCycle,
   onExitPosition,
@@ -12,8 +15,16 @@ export default function PortfolioPositionsPanel({
 }) {
   const [exitingSymbol, setExitingSymbol] = useState(null);
 
-  const holdings = demat?.holdings || [];
-  const positions = demat?.positions || [];
+  const filterByQuery = (item) => {
+    if (!searchQuery?.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const sym = (item.trading_symbol || item.symbol || '').toLowerCase();
+    const name = (item.company_name || '').toLowerCase();
+    return sym.includes(q) || name.includes(q);
+  };
+
+  const holdings = (demat?.holdings || []).filter(filterByQuery);
+  const positions = (demat?.positions || []).filter(filterByQuery);
   const managed = autotrader?.managed_positions || [];
   const logs = autotrader?.recent_logs || [];
   const isActive = autotrader?.is_active ?? false;
@@ -110,12 +121,26 @@ export default function PortfolioPositionsPanel({
             </div>
           </div>
 
-          <div className="bg-[#121724] border border-[#1b2336] p-3 rounded-lg flex items-center gap-2.5">
-            <PhoneCall className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <span className="text-[10px] text-gray-400 font-semibold block uppercase">WhatsApp Alert Target</span>
-              <strong className="text-emerald-400 font-mono text-xs">{autotrader?.notification_phone || '+91 98765 43210'}</strong>
+          <div className="bg-[#121724] border border-[#1b2336] p-3 rounded-lg flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <PhoneCall className={`w-4 h-4 shrink-0 ${whatsAppPhone ? 'text-emerald-400' : 'text-gray-500'}`} />
+              <div>
+                <span className="text-[10px] text-gray-400 font-semibold block uppercase">WhatsApp Alert Target</span>
+                {whatsAppPhone ? (
+                  <strong className="text-emerald-400 font-mono text-xs">{whatsAppPhone}</strong>
+                ) : (
+                  <span className="text-amber-400 font-mono text-xs">Not Linked</span>
+                )}
+              </div>
             </div>
+            {!whatsAppPhone && onOpenWhatsAppModal && (
+              <button
+                onClick={onOpenWhatsAppModal}
+                className="px-2 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-semibold transition-all shrink-0"
+              >
+                Link Now
+              </button>
+            )}
           </div>
         </div>
       </div>

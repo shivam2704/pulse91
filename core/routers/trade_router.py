@@ -34,10 +34,25 @@ class AutoTraderConfigPayload(BaseModel):
 def execute_order(payload: OrderPayload):
     """
     Executes a 1-click buy or sell order into Demat/Sandbox.
+    Automatically registers with the autonomous quant daemon for Target/Stop-Loss execution.
     Automatically dispatches WhatsApp execution notification.
     """
     try:
         res = broker_engine.place_order(payload.model_dump())
+        sym = payload.symbol.upper()
+        if payload.side.upper() == "BUY":
+            price = res["order"]["price"]
+            sl = payload.sl_price or round(price * 0.9722, 2)
+            t1 = payload.target_price or round(price * 1.0555, 2)
+            autotrader_engine.register_position(
+                symbol=sym,
+                quantity=payload.quantity,
+                entry_price=price,
+                target_1=t1,
+                stop_loss=sl
+            )
+        else:
+            autotrader_engine.unregister_position(sym)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -50,6 +65,7 @@ def square_off_position(payload: ExitPayload):
     """
     try:
         res = broker_engine.exit_position(payload.symbol)
+        autotrader_engine.unregister_position(payload.symbol)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

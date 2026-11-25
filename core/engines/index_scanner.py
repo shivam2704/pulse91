@@ -14,10 +14,11 @@ class IndexScannerEngine:
         self.confluence = confluence_engine
         self._cached_monday_picks: Dict[str, Any] = {}
 
-    def scan_index(self, index_key: str) -> Dict[str, Any]:
+    def scan_index(self, index_key: str, limit: Any = None) -> Dict[str, Any]:
         """
         On-demand scanner for any selected Indian stock index.
         Runs full 5-Pillar Confluence assessment on each constituent.
+        Supports optional `limit` parameter (e.g. limit=15) to return Top N ranked setups.
         """
         clean_key = index_key.upper().replace(" ", "_")
         if clean_key not in NSE_INDICES:
@@ -34,7 +35,7 @@ class IndexScannerEngine:
         # Sort descending by Confluence Score
         results.sort(key=lambda x: x["confluence_score"], reverse=True)
 
-        # Compute summary metrics
+        # Compute summary metrics across full index
         strong_buys = [r for r in results if r["verdict"] == "STRONG BUY"]
         momentum_buys = [r for r in results if r["verdict"] == "MOMENTUM BUY"]
         neutral = [r for r in results if "NEUTRAL" in r["verdict"]]
@@ -42,12 +43,18 @@ class IndexScannerEngine:
 
         avg_score = round(sum(r["confluence_score"] for r in results) / max(1, len(results)), 1)
 
+        # Apply limit if requested (e.g. Top 15)
+        returned_results = results
+        if limit is not None and int(limit) > 0:
+            returned_results = results[:int(limit)]
+
         return {
             "index_key": clean_key,
             "index_name": index_info["name"],
             "description": index_info["description"],
             "scanned_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S IST"),
             "total_constituents": len(symbols),
+            "returned_count": len(returned_results),
             "summary": {
                 "strong_buy_count": len(strong_buys),
                 "momentum_buy_count": len(momentum_buys),
@@ -55,7 +62,7 @@ class IndexScannerEngine:
                 "avoid_count": len(avoid),
                 "average_confluence_score": avg_score
             },
-            "rankings": results
+            "rankings": returned_results
         }
 
     def run_monday_8am_scan(self, force_refresh: bool = False) -> Dict[str, Any]:

@@ -3,6 +3,7 @@ import { Calendar, TrendingUp, ShieldAlert, Target, MessageSquare, ShoppingCart,
 
 export default function MondayTop15Panel({
   mondayData,
+  searchQuery,
   onSelectStock,
   onOpenWhatsApp,
   onOpenOrder,
@@ -10,7 +11,16 @@ export default function MondayTop15Panel({
   isRefreshing,
   selectedSymbol
 }) {
-  const picks = mondayData?.picks || [];
+  const allPicks = mondayData?.picks || [];
+  const picks = allPicks.filter(p => {
+    if (!searchQuery?.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      p.symbol?.toLowerCase().includes(q) ||
+      p.company_name?.toLowerCase().includes(q) ||
+      p.sector?.toLowerCase().includes(q)
+    );
+  });
   const topSectors = mondayData?.top_outperforming_sectors || [];
 
   return (

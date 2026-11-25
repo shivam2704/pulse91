@@ -10,7 +10,7 @@ export default function WhatsAppPreviewModal({
   if (!isOpen || !stock) return null;
 
   const [copied, setCopied] = useState(false);
-  const [phone, setPhone] = useState('+919876543210');
+  const [phone, setPhone] = useState(localStorage.getItem('pulse91_whatsapp_phone') || '');
   const [sending, setSending] = useState(false);
   const [sentSuccess, setSentSuccess] = useState(false);
 
