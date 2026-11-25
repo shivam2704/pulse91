@@ -193,9 +193,9 @@ export default function PortfolioPositionsPanel({
               <tbody className="divide-y divide-[#161d2d]">
                 {/* 1. Open Intraday / Swing Positions */}
                 {positions.map((pos) => {
-                  const ltp = pos.current_price || pos.entry_price;
-                  const pnl = (ltp - pos.entry_price) * pos.quantity;
-                  const pnlPct = ((ltp - pos.entry_price) / pos.entry_price) * 100;
+                  const ltp = pos.ltp ?? pos.current_price ?? pos.entry_price;
+                  const pnl = pos.unrealized_pnl ?? ((ltp - pos.entry_price) * pos.quantity);
+                  const pnlPct = pos.pnl_pct ?? (((ltp - pos.entry_price) / (pos.entry_price || 1)) * 100);
                   const isPositive = pnl >= 0;
 
                   return (
@@ -221,18 +221,18 @@ export default function PortfolioPositionsPanel({
                         ₹{ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-3 font-mono text-right text-gray-200">
-                        ₹{(pos.quantity * ltp).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{(pos.current_value ?? (pos.quantity * ltp)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className={`py-3 px-3 font-mono text-right font-bold ${
                         isPositive ? 'text-emerald-400' : 'text-red-400'
                       }`}>
-                        {isPositive ? '+' : ''}₹{pnl.toFixed(2)} ({isPositive ? '+' : ''}{pnlPct.toFixed(2)}%)
+                        {pnl > 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
                       </td>
                       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleExit(pos.symbol)}
                           disabled={exitingSymbol === pos.symbol}
-                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50"
+                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                         >
                           {exitingSymbol === pos.symbol ? 'Selling...' : 'Sell / Exit'}
                         </button>
@@ -243,9 +243,10 @@ export default function PortfolioPositionsPanel({
 
                 {/* 2. Demat Delivery Holdings */}
                 {holdings.map((h) => {
-                  const ltp = h.current_price || h.avg_buy_price;
-                  const pnl = h.pnl ?? ((ltp - h.avg_buy_price) * h.quantity);
-                  const pnlPct = h.pnl_pct ?? (((ltp - h.avg_buy_price) / h.avg_buy_price) * 100);
+                  const buyPrice = h.avg_buy_price ?? h.buy_price ?? 0;
+                  const ltp = h.ltp ?? h.current_price ?? buyPrice;
+                  const pnl = h.unrealized_pnl ?? h.pnl ?? ((ltp - buyPrice) * h.quantity);
+                  const pnlPct = h.pnl_pct ?? (((ltp - buyPrice) / (buyPrice || 1)) * 100);
                   const isPositive = pnl >= 0;
 
                   return (
@@ -265,24 +266,24 @@ export default function PortfolioPositionsPanel({
                       </td>
                       <td className="py-3 px-3 font-mono text-right text-gray-200">{h.quantity}</td>
                       <td className="py-3 px-3 font-mono text-right text-gray-300">
-                        ₹{h.avg_buy_price?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{buyPrice?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-3 font-mono text-right font-bold text-white">
                         ₹{ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="py-3 px-3 font-mono text-right text-gray-200">
-                        ₹{(h.current_value || (h.quantity * ltp)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{(h.current_value ?? (h.quantity * ltp)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className={`py-3 px-3 font-mono text-right font-bold ${
                         isPositive ? 'text-emerald-400' : 'text-red-400'
                       }`}>
-                        {isPositive ? '+' : ''}₹{pnl.toFixed(2)} ({isPositive ? '+' : ''}{pnlPct.toFixed(2)}%)
+                        {pnl > 0 ? '+' : ''}₹{pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
                       </td>
                       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleExit(h.symbol)}
                           disabled={exitingSymbol === h.symbol}
-                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50"
+                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                         >
                           {exitingSymbol === h.symbol ? 'Selling...' : 'Sell / Exit'}
                         </button>
