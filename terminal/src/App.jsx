@@ -397,7 +397,6 @@ export default function App() {
         onOpenWhatsAppModal={() => setIsWhatsAppConfigOpen(true)}
         onOpenDemat={() => setIsDematModalOpen(true)}
         onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
-        onToggleMode={handleToggleMode}
       />
 
       {/* Floating Order Execution Toast */}

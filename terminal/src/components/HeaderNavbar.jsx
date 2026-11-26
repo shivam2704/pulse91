@@ -7,8 +7,7 @@ export default function HeaderNavbar({
   whatsAppPhone,
   onOpenWhatsAppModal,
   onOpenDemat,
-  onOpenConnectBroker,
-  onToggleMode
+  onOpenConnectBroker
 }) {
   const isMarketBullish = (market?.nifty_change_pct ?? 0) >= 0;
   const isSandbox = demat?.mode === 'SANDBOX';
