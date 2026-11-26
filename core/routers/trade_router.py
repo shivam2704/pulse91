@@ -6,23 +6,11 @@ API endpoints for 1-Click Order Execution, GTT Triggers, and Square-Off
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from ..engines.broker_engine import broker_engine
-from ..engines.autotrader_engine import autotrader_engine
+from ..brokers import broker_engine, autotrader_engine
+from ..quant import confluence_engine
+from ..models import OrderPayload, ExitPayload
 
 router = APIRouter(prefix="/api/v1/trade", tags=["Order Execution & Risk"])
-
-class OrderPayload(BaseModel):
-    symbol: str
-    quantity: int
-    side: str = "BUY" # "BUY" or "SELL"
-    product: str = "CNC" # "CNC" (Delivery) or "MIS" (Intraday)
-    order_type: str = "MARKET"
-    price: Optional[float] = None
-    sl_price: Optional[float] = None
-    target_price: Optional[float] = None
-
-class ExitPayload(BaseModel):
-    symbol: str
 
 class AutoTraderConfigPayload(BaseModel):
     is_active: Optional[bool] = None
@@ -42,8 +30,17 @@ def execute_order(payload: OrderPayload):
         sym = payload.symbol.upper()
         if payload.side.upper() == "BUY":
             price = res["order"]["price"]
-            sl = payload.sl_price or round(price * 0.9722, 2)
-            t1 = payload.target_price or round(price * 1.0555, 2)
+            if payload.sl_price and payload.target_price:
+                sl = payload.sl_price
+                t1 = payload.target_price
+            else:
+                try:
+                    plan = confluence_engine.analyze_stock(sym).get("trade_plan", {})
+                    sl = payload.sl_price or plan.get("stop_loss_price") or round(price * 0.97, 2)
+                    t1 = payload.target_price or plan.get("target_1_price") or round(price * 1.05, 2)
+                except Exception:
+                    sl = payload.sl_price or round(price * 0.97, 2)
+                    t1 = payload.target_price or round(price * 1.05, 2)
             autotrader_engine.register_position(
                 symbol=sym,
                 quantity=payload.quantity,

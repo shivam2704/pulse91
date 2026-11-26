@@ -68,7 +68,7 @@ export default function PortfolioPositionsPanel({
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Monitors Monday Top 15 setups. Automatically enters at VCP breakout pivots, books profit at Target (+5.55%), cuts loss at Stop (-2.78%), and dispatches WhatsApp alerts on execution.
+                Monitors high-confluence setups. Automatically enters at VCP breakout pivots, books profit at dynamic ATR Target 1, cuts loss at trailing Stop-Loss, and dispatches WhatsApp alerts.
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function PortfolioPositionsPanel({
             <Target className="w-4 h-4 text-emerald-400 shrink-0" />
             <div>
               <span className="text-[10px] text-gray-400 font-semibold block uppercase">Auto-Sell Target</span>
-              <strong className="text-emerald-400 font-mono text-sm">+5.55% (Target 1 Hit)</strong>
+              <strong className="text-emerald-400 font-mono text-sm">Dynamic ATR (1:2 R:R)</strong>
             </div>
           </div>
 
@@ -111,7 +111,7 @@ export default function PortfolioPositionsPanel({
             <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
             <div>
               <span className="text-[10px] text-gray-400 font-semibold block uppercase">Auto-Cut Loss</span>
-              <strong className="text-red-400 font-mono text-sm">-2.78% (Capital Defense)</strong>
+              <strong className="text-red-400 font-mono text-sm">Dynamic ATR Defense</strong>
             </div>
           </div>
 
@@ -119,7 +119,7 @@ export default function PortfolioPositionsPanel({
             <ShoppingBag className="w-4 h-4 text-cyan-400 shrink-0" />
             <div>
               <span className="text-[10px] text-gray-400 font-semibold block uppercase">Max Allocation / Position</span>
-              <strong className="text-white font-mono text-sm">₹50,000 (Max 5 Setups)</strong>
+              <strong className="text-white font-mono text-sm">₹{Number(autotrader?.max_capital_per_trade || 3000).toLocaleString('en-IN')} (Max {autotrader?.max_open_positions || 3} Setups)</strong>
             </div>
           </div>
 
@@ -159,7 +159,7 @@ export default function PortfolioPositionsPanel({
               </span>
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              Live tick monitoring. Daemon automatically sells at Target 1 (+5.55%) or executes Stop-Loss (-2.78%) defense.
+              Live tick monitoring. Daemon automatically sells at Target 1 or executes ATR Stop-Loss defense.
             </p>
           </div>
           <div className="flex items-center gap-2">

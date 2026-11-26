@@ -189,7 +189,7 @@ export default function WhatsAppConfigModal({
                   onChange={(e) => setNotifyTargets(e.target.checked)}
                   className="rounded accent-emerald-500 cursor-pointer"
                 />
-                <span>Target 1 (+5.55%) & Stop-Loss (-2.78%) Automated Triggers</span>
+                <span>Target 1 & Stop-Loss Dynamic ATR Automated Triggers</span>
               </label>
 
               <label className="flex items-center gap-2.5 cursor-pointer text-gray-300 hover:text-white">

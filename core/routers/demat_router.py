@@ -6,24 +6,10 @@ API endpoints for Live Demat Portfolio, Funds, and Sandbox Mode Switching
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from ..engines.broker_engine import broker_engine
+from ..brokers import broker_engine
+from ..models import ModeSwitchPayload as SwitchModeRequest, BrokerConnectPayload as ConnectBrokerRequest
 
 router = APIRouter(prefix="/api/v1/demat", tags=["Demat & Broker Gateway"])
-
-class SwitchModeRequest(BaseModel):
-    mode: str # "SANDBOX" or "LIVE_DEMAT"
-    broker: Optional[str] = "Groww"
-    account_id: Optional[str] = "PULSE91-CLIENT-01"
-
-class ConnectBrokerRequest(BaseModel):
-    broker: str = "Groww"
-    api_key: Optional[str] = None
-    api_secret: Optional[str] = None
-    client_id: Optional[str] = None       # Dhan Client ID / Angel Client Code
-    access_token: Optional[str] = None    # Dhan / Zerodha Access Token
-    pin: Optional[str] = None             # Angel One MPIN
-    totp_secret: Optional[str] = None     # Angel One TOTP
-    account_id: Optional[str] = None
 
 @router.post("/connect")
 def connect_user_broker(payload: ConnectBrokerRequest):

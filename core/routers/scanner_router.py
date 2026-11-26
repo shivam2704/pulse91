@@ -5,9 +5,8 @@ API endpoints for On-Demand Index Scanning, Monday 8 AM Scan, and Single-Stock D
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from ..engines.index_scanner import index_scanner_engine
-from ..engines.confluence_engine import confluence_engine
-from ..engines.market_data import market_data_engine
+from ..quant import index_scanner_engine, confluence_engine
+from ..services import market_data_engine
 
 router = APIRouter(prefix="/api/v1/scan", tags=["Scanner & Confluence Analysis"])
 

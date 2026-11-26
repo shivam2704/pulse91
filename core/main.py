@@ -18,9 +18,8 @@ from .routers.scanner_router import router as scanner_router
 from .routers.demat_router import router as demat_router
 from .routers.trade_router import router as trade_router
 from .routers.alerts_router import router as alerts_router
-from .engines.market_data import market_data_engine
-from .engines.broker_engine import broker_engine
-from .engines.autotrader_engine import autotrader_engine
+from .services import market_data_engine
+from .brokers import broker_engine, autotrader_engine
 
 app = FastAPI(
     title="Pulse91 Dalal Street Quant Terminal",
@@ -104,15 +103,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "is_market_open": regime.get("is_market_open", False),
                     "session_status": regime.get("session_status", "MARKET CLOSED")
                 },
-                "demat": {
-                    "mode": portfolio["mode"],
-                    "net_worth": portfolio["account_net_worth"],
-                    "available_cash": portfolio["available_cash"],
-                    "unrealized_pnl": portfolio["total_unrealized_pnl"],
-                    "today_pnl": portfolio["today_pnl"],
-                    "holdings_count": portfolio["holdings_count"],
-                    "open_positions_count": portfolio["open_positions_count"]
-                }
+                "demat": portfolio
             }
             await websocket.send_text(json.dumps(payload))
             await asyncio.sleep(2.0)

@@ -11,7 +11,7 @@ export default function OrderExecutionModal({
 }) {
   if (!isOpen || !stock) return null;
 
-  const ltp = stock.ltp || 1000;
+  const ltp = Number(stock.ltp || 0);
   
   // Percentages and target levels from trade plan
   const slDefault = stock.trade_plan?.stop_loss_price || Number((ltp * 0.9722).toFixed(2));
@@ -45,14 +45,14 @@ export default function OrderExecutionModal({
 
   const totalInvestment = Math.round(ltp * effectiveQty);
   const slDiff = ltp - effectiveSl;
-  const slPct = ((effectiveSl - ltp) / ltp) * 100;
+  const slPct = ltp > 0 ? ((effectiveSl - ltp) / ltp) * 100 : 0;
   const maxLossINR = Math.round(slDiff * effectiveQty);
 
   const targetDiff = effectiveTarget - ltp;
-  const targetPct = ((effectiveTarget - ltp) / ltp) * 100;
+  const targetPct = ltp > 0 ? ((effectiveTarget - ltp) / ltp) * 100 : 0;
   const maxProfitINR = Math.round(targetDiff * effectiveQty);
 
-  const hasSufficientFunds = (availableCash || 10000) >= totalInvestment;
+  const hasSufficientFunds = (availableCash !== undefined && availableCash !== null ? availableCash : 10000) >= totalInvestment;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -181,11 +181,11 @@ export default function OrderExecutionModal({
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                   <div className="p-2 bg-[#0c101a] rounded border border-emerald-500/20">
-                    <span className="text-gray-400 text-[10px] block">Target 1 (+5.55%)</span>
+                    <span className="text-gray-400 text-[10px] block">Target 1 ({receipt.price > 0 ? `+${(((receipt.targetPrice - receipt.price) / receipt.price) * 100).toFixed(1)}%` : 'Target'})</span>
                     <strong className="text-emerald-400">₹{receipt.targetPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                   </div>
                   <div className="p-2 bg-[#0c101a] rounded border border-rose-500/20">
-                    <span className="text-gray-400 text-[10px] block">Stop-Loss (-2.78%)</span>
+                    <span className="text-gray-400 text-[10px] block">Stop-Loss ({receipt.price > 0 ? `${(((receipt.slPrice - receipt.price) / receipt.price) * 100).toFixed(1)}%` : 'SL'})</span>
                     <strong className="text-rose-400">₹{receipt.slPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                   </div>
                 </div>

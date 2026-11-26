@@ -358,7 +358,7 @@ export default function App() {
         setOrderToast({
           type: isNowActive ? 'BUY' : 'EXIT',
           message: isNowActive
-            ? '🤖 Auto-Trader Daemon ACTIVATED: Monitoring breakouts, Target (+5.55%) & Stop-Loss (-2.78%)'
+            ? '🤖 Auto-Trader Daemon ACTIVATED: Monitoring breakout pivots, dynamic ATR Targets & Stop-Losses'
             : '⏸️ Auto-Trader Daemon PAUSED: Autonomous order execution is on hold'
         });
         setTimeout(() => setOrderToast(null), 5000);
@@ -714,17 +714,19 @@ export default function App() {
 
                           {/* Buy Zone */}
                           <td className="py-3.5 px-3 font-mono text-gray-300">
-                            {stock.trade_plan?.entry_range || `₹${(stock.ltp * 0.995).toFixed(1)} - ₹${(stock.ltp * 1.005).toFixed(1)}`}
+                            {stock.trade_plan?.entry_range || (stock.ltp ? `₹${(stock.ltp * 0.995).toFixed(1)} - ₹${(stock.ltp * 1.005).toFixed(1)}` : '—')}
                           </td>
 
                           {/* Target 1 */}
                           <td className="py-3.5 px-3 font-mono">
                             <div className="text-emerald-400 font-semibold">
-                              ₹{(stock.trade_plan?.target_1_price || stock.trade_plan?.target_1 || (stock.ltp * 1.0555)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              ₹{(stock.trade_plan?.target_1_price || stock.trade_plan?.target_1 || stock.ltp || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </div>
-                            <span className="text-[10px] text-gray-500 font-normal">
-                              (+5.55%)
-                            </span>
+                            {stock.ltp > 0 && (stock.trade_plan?.target_1_price || stock.trade_plan?.target_1) ? (
+                              <span className="text-[10px] text-gray-500 font-normal">
+                                (+{(((stock.trade_plan?.target_1_price || stock.trade_plan?.target_1) - stock.ltp) / stock.ltp * 100).toFixed(1)}%)
+                              </span>
+                            ) : null}
                           </td>
 
                           {/* Actions */}

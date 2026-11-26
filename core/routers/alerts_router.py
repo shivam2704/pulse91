@@ -4,22 +4,12 @@ API endpoints for WhatsApp and Webhook Trade Alerts
 """
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 from typing import Optional
-from ..engines.whatsapp_alerter import whatsapp_alerter
-from ..engines.confluence_engine import confluence_engine
+from ..services import whatsapp_alerter
+from ..quant import confluence_engine
+from ..models import WhatsAppSendPayload, WhatsAppConfigPayload
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["WhatsApp & Webhook Alerts"])
-
-class WhatsAppSendPayload(BaseModel):
-    symbol: str
-    phone_number: Optional[str] = None
-    webhook_url: Optional[str] = None
-
-class WhatsAppConfigPayload(BaseModel):
-    phone_number: Optional[str] = ""
-    webhook_url: Optional[str] = None
-    alerts_enabled: Optional[bool] = True
 
 @router.get("/config")
 def get_whatsapp_config():
@@ -78,8 +68,8 @@ def send_test_whatsapp_alert(payload: Optional[WhatsAppConfigPayload] = None):
 
 📈 *AUTOMATED NOTIFICATIONS ENABLED:*
 • Instant Deal Fill Receipts (CNC & MIS)
-• Target 1 (+5.55%) Profit Exits
-• Stop-Loss (-2.78%) Protection Triggers
+• Dynamic ATR Target 1 Profit Exits
+• Volatility Trailing Stop-Loss Protection Triggers
 • Monday 09:15 AM Top-15 VCP Momentum Picks
 ━━━━━━━━━━━━━━━━━━━━
 ⚡ *Pulse91 Quant Terminal* • Dalal Street Engine"""

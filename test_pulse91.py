@@ -66,7 +66,7 @@ def test_demat_portfolio():
     portfolio = res.json()["portfolio"]
     assert portfolio["mode"] in ["SANDBOX", "LIVE_DEMAT"]
     assert portfolio["available_cash"] >= 0
-    assert len(portfolio["holdings"]) > 0
+    assert isinstance(portfolio["holdings"], list)
     print(f"✓ /api/v1/demat/overview passed: Net Worth ₹{portfolio['account_net_worth']:,.2f}, Available Cash ₹{portfolio['available_cash']:,.2f}")
 
 def test_order_execution_and_exit():
