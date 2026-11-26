@@ -79,11 +79,14 @@ export default function HeaderNavbar({
             )}
           </button>
 
-          <div className="hidden xl:flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
+          <div 
+            className="hidden xl:flex items-center gap-2 bg-[#121824] hover:bg-[#151f33] px-3 py-1.5 rounded-lg border border-[#1e2638] hover:border-emerald-500/30 transition-all cursor-help"
+            title={market?.fii_cr != null && market?.dii_cr != null ? `FII (FPI): ${Number(market.fii_cr) >= 0 ? '+' : ''}₹${Number(market.fii_cr).toLocaleString('en-IN')} Cr | DII: ${Number(market.dii_cr) >= 0 ? '+' : ''}₹${Number(market.dii_cr).toLocaleString('en-IN')} Cr (${market.fii_dii_date || 'NSE Report'})` : 'NSE Official Daily Institutional Net Investment Flow'}
+          >
             <span className="text-gray-400 font-semibold text-[11px]">FII/DII FLOW</span>
-            {market?.fii_dii_cr ? (
-              <span className="font-mono text-emerald-400 font-medium">
-                +{Number(market.fii_dii_cr).toLocaleString('en-IN')} Cr
+            {market?.fii_dii_cr != null ? (
+              <span className={`font-mono font-medium ${Number(market.fii_dii_cr) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {Number(market.fii_dii_cr) >= 0 ? '+' : ''}{Number(market.fii_dii_cr).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Cr
               </span>
             ) : (
               <div className="w-16 h-4 bg-[#1b2336] rounded animate-pulse"></div>

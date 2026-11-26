@@ -103,6 +103,13 @@ export default function App() {
             nifty_change_pct: json.market.nifty_change_pct,
             regime: json.market.regime_status,
             fii_dii_cr: json.market.fii_dii_net_flow_cr,
+            fii_cr: json.market.fii_cr,
+            dii_cr: json.market.dii_cr,
+            fii_dii_date: json.market.fii_dii_date,
+            nifty_20_ema: json.market.nifty_20_ema,
+            nifty_50_ema: json.market.nifty_50_ema,
+            adx_14: json.market.adx_14,
+            regime_status: json.market.regime_status,
             is_market_open: json.market.is_market_open,
             session_status: json.market.session_status
           });

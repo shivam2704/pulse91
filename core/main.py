@@ -98,6 +98,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     "nifty_change_pct": regime["nifty_change_pct"],
                     "regime": regime["regime_status"],
                     "fii_dii_cr": regime["fii_dii_net_flow_cr"],
+                    "fii_cr": regime.get("fii_cr"),
+                    "dii_cr": regime.get("dii_cr"),
+                    "fii_dii_date": regime.get("fii_dii_date"),
                     "is_market_open": regime.get("is_market_open", False),
                     "session_status": regime.get("session_status", "MARKET CLOSED")
                 },
