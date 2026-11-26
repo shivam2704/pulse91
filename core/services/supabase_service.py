@@ -2,7 +2,7 @@
 pulse91/core/services/supabase_service.py
 Robust Supabase Database Adapter for Pulse91 Quant Terminal.
 Persists Demat holdings, ledger cash balances, orders, and autotrader states
-directly into Supabase PostgreSQL tables.
+directly into Supabase PostgreSQL tables (portfolio, holdings, orders, etc.).
 Gracefully falls back to local session state if SUPABASE_URL / KEY are not set.
 """
 
@@ -15,8 +15,8 @@ logger = logging.getLogger("pulse91.supabase")
 
 class SupabaseService:
     def __init__(self):
-        self.supabase_url = os.getenv("SUPABASE_URL", "").strip()
-        self.supabase_key = os.getenv("SUPABASE_KEY", "").strip()
+        self.supabase_url = (os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL") or "").strip()
+        self.supabase_key = (os.getenv("SUPABASE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY") or "").strip()
         self.client = None
         self._init_client()
 
@@ -42,7 +42,7 @@ class SupabaseService:
         if not self.is_active:
             return None
         try:
-            res = self.client.table("pulse91_portfolio").select("*").eq("account_id", account_id).eq("mode", mode).limit(1).execute()
+            res = self.client.table("portfolio").select("*").eq("account_id", account_id).eq("mode", mode).limit(1).execute()
             if res.data and len(res.data) > 0:
                 row = res.data[0]
                 return {
@@ -68,7 +68,7 @@ class SupabaseService:
                 "available_cash": float(portfolio.get("available_cash", 10000.0)),
                 "updated_at": datetime.now().isoformat()
             }
-            self.client.table("pulse91_portfolio").upsert(payload, on_conflict="account_id,mode").execute()
+            self.client.table("portfolio").upsert(payload, on_conflict="account_id,mode").execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase save_portfolio error: {e}")
@@ -80,7 +80,7 @@ class SupabaseService:
         if not self.is_active:
             return None
         try:
-            res = self.client.table("pulse91_holdings").select("*").eq("account_id", account_id).eq("mode", mode).execute()
+            res = self.client.table("holdings").select("*").eq("account_id", account_id).eq("mode", mode).execute()
             if res.data is not None:
                 holdings = []
                 for h in res.data:
@@ -114,7 +114,7 @@ class SupabaseService:
                 "product": holding.get("product", "CNC"),
                 "date_bought": holding.get("date_bought") or datetime.now().strftime("%Y-%m-%d")
             }
-            self.client.table("pulse91_holdings").upsert(payload, on_conflict="account_id,mode,symbol").execute()
+            self.client.table("holdings").upsert(payload, on_conflict="account_id,mode,symbol").execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase save_holding error: {e}")
@@ -124,7 +124,7 @@ class SupabaseService:
         if not self.is_active:
             return False
         try:
-            self.client.table("pulse91_holdings").delete().eq("account_id", account_id).eq("mode", mode).eq("symbol", symbol).execute()
+            self.client.table("holdings").delete().eq("account_id", account_id).eq("mode", mode).eq("symbol", symbol).execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase delete_holding error: {e}")
@@ -134,7 +134,7 @@ class SupabaseService:
         if not self.is_active:
             return False
         try:
-            self.client.table("pulse91_holdings").delete().eq("account_id", account_id).eq("mode", mode).execute()
+            self.client.table("holdings").delete().eq("account_id", account_id).eq("mode", mode).execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase clear_holdings error: {e}")
@@ -149,6 +149,7 @@ class SupabaseService:
             payload = {
                 "order_id": order.get("order_id"),
                 "account_id": order.get("account_id", "PULSE91-DEMAT-SBX-01"),
+                "mode": order.get("mode", "SANDBOX"),
                 "symbol": order.get("symbol"),
                 "side": order.get("side", "BUY"),
                 "product": order.get("product", "CNC"),
@@ -160,7 +161,7 @@ class SupabaseService:
                 "order_session": order.get("order_session", "REGULAR"),
                 "created_at": datetime.now().isoformat()
             }
-            self.client.table("pulse91_orders").insert(payload).execute()
+            self.client.table("orders").insert(payload).execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase save_order error: {e}")
@@ -170,7 +171,7 @@ class SupabaseService:
         if not self.is_active:
             return None
         try:
-            res = self.client.table("pulse91_orders").select("*").eq("account_id", account_id).order("created_at", desc=True).limit(limit).execute()
+            res = self.client.table("orders").select("*").eq("account_id", account_id).order("created_at", desc=True).limit(limit).execute()
             return res.data or []
         except Exception as e:
             logger.warning(f"Supabase load_orders error: {e}")
@@ -182,7 +183,7 @@ class SupabaseService:
         if not self.is_active:
             return None
         try:
-            res = self.client.table("pulse91_autotrader").select("*").eq("id", 1).limit(1).execute()
+            res = self.client.table("autotrader").select("*").eq("id", 1).limit(1).execute()
             if res.data and len(res.data) > 0:
                 row = res.data[0]
                 return {
@@ -207,7 +208,7 @@ class SupabaseService:
                 "managed_positions": data.get("managed_positions", []),
                 "updated_at": datetime.now().isoformat()
             }
-            self.client.table("pulse91_autotrader").upsert(payload, on_conflict="id").execute()
+            self.client.table("autotrader").upsert(payload, on_conflict="id").execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase save_autotrader error: {e}")
@@ -224,7 +225,7 @@ class SupabaseService:
                 "reason": log.get("reason", ""),
                 "details": log.get("details", {})
             }
-            self.client.table("pulse91_execution_logs").insert(payload).execute()
+            self.client.table("execution_logs").insert(payload).execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase add_execution_log error: {e}")
@@ -234,19 +235,19 @@ class SupabaseService:
         if not self.is_active:
             return None
         try:
-            res = self.client.table("pulse91_execution_logs").select("*").order("created_at", desc=True).limit(limit).execute()
+            res = self.client.table("execution_logs").select("*").order("created_at", desc=True).limit(limit).execute()
             return res.data or []
         except Exception as e:
             logger.warning(f"Supabase load_execution_logs error: {e}")
             return None
 
-    # --- Key-Value Settings (WhatsApp, layout) ---
+    # --- Key-Value Settings (Preferences) ---
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         if not self.is_active:
             return default
         try:
-            res = self.client.table("pulse91_settings").select("value").eq("key", key).limit(1).execute()
+            res = self.client.table("settings").select("value").eq("key", key).limit(1).execute()
             if res.data and len(res.data) > 0:
                 return res.data[0].get("value")
         except Exception as e:
@@ -262,7 +263,7 @@ class SupabaseService:
                 "value": value,
                 "updated_at": datetime.now().isoformat()
             }
-            self.client.table("pulse91_settings").upsert(payload, on_conflict="key").execute()
+            self.client.table("settings").upsert(payload, on_conflict="key").execute()
             return True
         except Exception as e:
             logger.warning(f"Supabase set_setting error: {e}")

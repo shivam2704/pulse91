@@ -1,14 +1,16 @@
 """
-pulse91/backend/routers/trade_router.py
-API endpoints for 1-Click Order Execution, GTT Triggers, and Square-Off
+pulse91/core/routers/trade_router.py
+API endpoints for 1-Click Order Execution, GTT Triggers, and Square-Off.
+Secured with cryptographic user isolation via Supabase Auth tokens.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from ..brokers import broker_engine, autotrader_engine
 from ..quant import confluence_engine
 from ..models import OrderPayload, ExitPayload
+from ..services.auth_service import get_current_user_id
 
 router = APIRouter(prefix="/api/v1/trade", tags=["Order Execution & Risk"])
 
@@ -19,14 +21,18 @@ class AutoTraderConfigPayload(BaseModel):
     notification_phone: Optional[str] = None
 
 @router.post("/order")
-def execute_order(payload: OrderPayload):
+def execute_order(
+    payload: OrderPayload,
+    account_id: str = Depends(get_current_user_id)
+):
     """
     Executes a 1-click buy or sell order into Demat/Sandbox.
+    Guarantees isolation to the authenticated user's portfolio and cash ledger.
     Automatically registers with the autonomous quant daemon for Target/Stop-Loss execution.
     Automatically dispatches WhatsApp execution notification.
     """
     try:
-        res = broker_engine.place_order(payload.model_dump())
+        res = broker_engine.place_order(payload.model_dump(), account_id=account_id)
         sym = payload.symbol.upper()
         if payload.side.upper() == "BUY":
             price = res["order"]["price"]
@@ -55,27 +61,27 @@ def execute_order(payload: OrderPayload):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/exit")
-def square_off_position(payload: ExitPayload):
+def square_off_position(
+    payload: ExitPayload,
+    account_id: str = Depends(get_current_user_id)
+):
     """
-    Squares off an active open position or Demat holding at market price.
+    Squares off an active open position or Demat holding at market price for this user.
     Automatically books realized PnL and dispatches WhatsApp notification.
     """
     try:
-        res = broker_engine.exit_position(payload.symbol)
+        res = broker_engine.exit_position(payload.symbol, account_id=account_id)
         autotrader_engine.unregister_position(payload.symbol)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/history")
-def get_order_history():
+def get_order_history(account_id: str = Depends(get_current_user_id)):
     """
-    Returns full order logs and executions.
+    Returns full order logs and executions isolated to this user account.
     """
-    return {
-        "orders": broker_engine.orders,
-        "gtt_triggers": broker_engine.gtt_triggers
-    }
+    return broker_engine.get_history(account_id=account_id)
 
 @router.get("/autotrader/status")
 def get_autotrader_status():

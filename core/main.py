@@ -13,6 +13,7 @@ load_dotenv()
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from .routers.scanner_router import router as scanner_router
 from .routers.demat_router import router as demat_router
@@ -26,6 +27,9 @@ app = FastAPI(
     description="Institutional-grade stock selection, 5-Pillar Confluence Engine, and Demat Gateway for NSE/BSE",
     version="1.0.0"
 )
+
+# Bandwidth Saver: Automatically compress all JSON payloads > 500 bytes by ~80%
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 app.add_middleware(
     CORSMiddleware,

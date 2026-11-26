@@ -18,4 +18,6 @@ class BrokerConnectPayload(BaseModel):
     client_id: Optional[str] = None
     access_token: Optional[str] = None
     pin: Optional[str] = None
+    totp_secret: Optional[str] = None
+    account_id: Optional[str] = None
     mode: Optional[str] = "LIVE_DEMAT"

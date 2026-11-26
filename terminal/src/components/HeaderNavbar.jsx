@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, ShieldCheck, Wallet, RefreshCw, BarChart2, Bell, MessageSquare, Loader2 } from 'lucide-react';
+import { Activity, ShieldCheck, Wallet, RefreshCw, BarChart2, Bell, MessageSquare, Loader2, User } from 'lucide-react';
 
 export default function HeaderNavbar({
   market,
@@ -8,7 +8,9 @@ export default function HeaderNavbar({
   onOpenWhatsAppModal,
   onOpenDemat,
   onOpenConnectBroker,
-  onOpenNiftyChart
+  onOpenNiftyChart,
+  currentUser,
+  onOpenAuthModal
 }) {
   const isMarketBullish = (market?.nifty_change_pct ?? 0) >= 0;
   const isSandbox = demat?.mode === 'SANDBOX';
@@ -156,6 +158,30 @@ export default function HeaderNavbar({
           ) : (
             <div className="w-28 h-7 bg-[#121824] border border-[#1e2638] rounded-lg animate-pulse"></div>
           )}
+
+          {/* User Authentication Pill */}
+          <button
+            onClick={onOpenAuthModal}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all whitespace-nowrap shrink-0 ${
+              currentUser
+                ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                : 'bg-[#121824] hover:bg-[#1a2336] border-[#1e2638] text-gray-300 hover:text-white'
+            }`}
+            title={currentUser ? `Signed in as ${currentUser.email}` : 'Sign in for isolated private Demat portfolio'}
+          >
+            {currentUser ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <User className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="max-w-[100px] truncate">{currentUser.email?.split('@')[0]}</span>
+              </>
+            ) : (
+              <>
+                <User className="w-3.5 h-3.5 text-gray-400" />
+                <span>Sign In</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </header>

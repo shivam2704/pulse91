@@ -22,7 +22,7 @@ class GrowwTradeApiAdapter:
     def get_client(self) -> GrowwAPI:
         """Initializes or refreshes the live authenticated GrowwAPI client."""
         if not self.api_key or not self.secret:
-            raise ValueError("Groww credentials not set. Please configure GROWW_API_KEY and GROWW_API_SECRET in your private .env file.")
+            raise ValueError("Groww credentials not set. Please connect your API Key and Secret via 'Connect Broker' in the Terminal.")
         now = time.time()
         if not self.client or not self.access_token or now >= self.token_expiry:
             try:

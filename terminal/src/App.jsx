@@ -10,6 +10,8 @@ import WhatsAppConfigModal from './components/WhatsAppConfigModal';
 import ConnectBrokerModal from './components/ConnectBrokerModal';
 import NiftyIndexChartModal from './components/NiftyIndexChartModal';
 import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
+import AuthModal from './components/AuthModal';
+import { getCurrentUser, onAuthStateChange } from './services/supabaseAuth';
 import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -40,6 +42,18 @@ export default function App() {
   const [whatsAppPhone, setWhatsAppPhone] = useState(localStorage.getItem('pulse91_whatsapp_phone') || '');
   const [isDeepDiveModalOpen, setIsDeepDiveModalOpen] = useState(false);
   const [orderToast, setOrderToast] = useState(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Sync Auth session on mount
+  useEffect(() => {
+    getCurrentUser().then(setCurrentUser).catch(() => {});
+    const authSub = onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+      fetchDemat();
+    });
+    return () => authSub?.data?.subscription?.unsubscribe();
+  }, []);
 
   // Sync WhatsApp config on mount
   useEffect(() => {
@@ -407,6 +421,8 @@ export default function App() {
         onOpenDemat={() => setIsDematModalOpen(true)}
         onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
         onOpenNiftyChart={() => setIsNiftyChartOpen(true)}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       {/* Floating Order Execution Toast */}
@@ -849,6 +865,16 @@ export default function App() {
         isOpen={isNiftyChartOpen}
         onClose={() => setIsNiftyChartOpen(false)}
         market={market}
+      />
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        user={currentUser}
+        onAuthSuccess={(u) => {
+          setCurrentUser(u);
+          fetchDemat();
+        }}
       />
 
       {/* Footer */}

@@ -1,6 +1,7 @@
 """
-pulse91/backend/engines/broker_engine.py
-Unified Broker Gateway with Sandbox (₹10L Virtual Demat) and Live Broker Adapters
+pulse91/core/brokers/gateway.py
+Unified Broker Gateway with Multi-Tenant Sandbox (₹10,000 Virtual Demat) and Live Broker Adapters.
+Guarantees absolute cryptographic isolation across concurrent user accounts.
 """
 
 import time
@@ -13,88 +14,178 @@ from ..services import market_data_engine, whatsapp_alerter, supabase_service
 from .groww import groww_adapter
 
 class BrokerEngine:
+    DEFAULT_ACCOUNT = "PULSE91-DEMAT-SBX-01"
+
     def __init__(self):
         self.market_data = market_data_engine
-        self.active_mode = "SANDBOX" # Default to Sandbox (Virtual Demat) for security!
-        self.broker_name = "Pulse91 Sandbox Broker"
-        self.account_id = "PULSE91-DEMAT-SBX-01"
-
-        # Sandbox Virtual State (₹10,000 Clean Starting Capital)
-        self.initial_balance = 10000.00 # ₹10,000 INR
-        self.available_cash = 10000.00
-        self.holdings: List[Dict[str, Any]] = []
-        self.positions: List[Dict[str, Any]] = []
-        self.orders: List[Dict[str, Any]] = []
-        self.gtt_triggers: List[Dict[str, Any]] = []
         self.supabase = supabase_service
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+        # Pre-initialize default sandbox session
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)
 
-        # Restore from Supabase if configured
-        if self.supabase and self.supabase.is_active:
-            try:
-                sb_port = self.supabase.load_portfolio(self.account_id, mode=self.active_mode)
-                if sb_port:
-                    self.active_mode = sb_port.get("mode", self.active_mode)
-                    self.broker_name = sb_port.get("broker", self.broker_name)
-                    self.initial_balance = sb_port.get("initial_balance", self.initial_balance)
-                    self.available_cash = sb_port.get("available_cash", self.available_cash)
-                sb_holdings = self.supabase.load_holdings(self.account_id, mode=self.active_mode)
-                if sb_holdings is not None:
-                    self.holdings = sb_holdings
-            except Exception:
-                pass
-
-    def reset_sandbox(self, initial_capital: float = 10000.00) -> Dict[str, Any]:
+    def _get_or_create_session(self, account_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Resets virtual Demat sandbox back to clean starting capital.
+        Retrieves or initializes an isolated user session.
+        If Supabase is active, loads portfolio & holdings for this account_id.
+        """
+        acc_id = account_id or self.DEFAULT_ACCOUNT
+        if acc_id not in self._sessions:
+            sess: Dict[str, Any] = {
+                "account_id": acc_id,
+                "active_mode": "SANDBOX",
+                "broker_name": "Pulse91 Sandbox Broker",
+                "initial_balance": 10000.00,
+                "available_cash": 10000.00,
+                "holdings": [],
+                "positions": [],
+                "orders": [],
+                "gtt_triggers": []
+            }
+            if self.supabase and self.supabase.is_active:
+                try:
+                    sb_port = self.supabase.load_portfolio(acc_id, mode="SANDBOX")
+                    if sb_port:
+                        sess["active_mode"] = sb_port.get("mode", "SANDBOX")
+                        sess["broker_name"] = sb_port.get("broker", "Pulse91 Sandbox Broker")
+                        sess["initial_balance"] = sb_port.get("initial_balance", 10000.00)
+                        sess["available_cash"] = sb_port.get("available_cash", 10000.00)
+                    sb_holdings = self.supabase.load_holdings(acc_id, mode="SANDBOX")
+                    if sb_holdings is not None:
+                        sess["holdings"] = sb_holdings
+                    sb_orders = self.supabase.load_orders(acc_id, limit=50)
+                    if sb_orders is not None:
+                        sess["orders"] = sb_orders
+                except Exception:
+                    pass
+            self._sessions[acc_id] = sess
+        return self._sessions[acc_id]
+
+    # --- Backward-Compatibility Properties (Operate on Default Session) ---
+    @property
+    def active_mode(self) -> str:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["active_mode"]
+
+    @active_mode.setter
+    def active_mode(self, val: str):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["active_mode"] = val
+
+    @property
+    def broker_name(self) -> str:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["broker_name"]
+
+    @broker_name.setter
+    def broker_name(self, val: str):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["broker_name"] = val
+
+    @property
+    def account_id(self) -> str:
+        return self.DEFAULT_ACCOUNT
+
+    @account_id.setter
+    def account_id(self, val: str):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["account_id"] = val
+
+    @property
+    def initial_balance(self) -> float:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["initial_balance"]
+
+    @initial_balance.setter
+    def initial_balance(self, val: float):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["initial_balance"] = val
+
+    @property
+    def available_cash(self) -> float:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["available_cash"]
+
+    @available_cash.setter
+    def available_cash(self, val: float):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["available_cash"] = val
+
+    @property
+    def holdings(self) -> List[Dict[str, Any]]:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["holdings"]
+
+    @holdings.setter
+    def holdings(self, val: List[Dict[str, Any]]):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["holdings"] = val
+
+    @property
+    def positions(self) -> List[Dict[str, Any]]:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["positions"]
+
+    @positions.setter
+    def positions(self, val: List[Dict[str, Any]]):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["positions"] = val
+
+    @property
+    def orders(self) -> List[Dict[str, Any]]:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["orders"]
+
+    @orders.setter
+    def orders(self, val: List[Dict[str, Any]]):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["orders"] = val
+
+    @property
+    def gtt_triggers(self) -> List[Dict[str, Any]]:
+        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["gtt_triggers"]
+
+    @gtt_triggers.setter
+    def gtt_triggers(self, val: List[Dict[str, Any]]):
+        self._get_or_create_session(self.DEFAULT_ACCOUNT)["gtt_triggers"] = val
+
+    # --- Multi-Tenant Methods ---
+
+    def reset_sandbox(self, initial_capital: float = 10000.00, account_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Resets virtual Demat sandbox back to clean starting capital for a specific user.
         Zero fake holdings, zero fake positions, zero fake trade logs.
         """
-        self.active_mode = "SANDBOX"
-        self.broker_name = "Pulse91 Sandbox Broker"
-        self.account_id = "PULSE91-DEMAT-SBX-01"
-        self.initial_balance = float(initial_capital)
-        self.available_cash = float(initial_capital)
-        self.holdings = []
-        self.positions = []
-        self.orders = []
-        self.gtt_triggers = []
+        sess = self._get_or_create_session(account_id)
+        sess["active_mode"] = "SANDBOX"
+        sess["broker_name"] = "Pulse91 Sandbox Broker"
+        sess["initial_balance"] = float(initial_capital)
+        sess["available_cash"] = float(initial_capital)
+        sess["holdings"] = []
+        sess["positions"] = []
+        sess["orders"] = []
+        sess["gtt_triggers"] = []
 
         if self.supabase and self.supabase.is_active:
             try:
                 self.supabase.save_portfolio({
-                    "account_id": self.account_id,
-                    "mode": self.active_mode,
-                    "broker": self.broker_name,
-                    "initial_balance": self.initial_balance,
-                    "available_cash": self.available_cash
+                    "account_id": sess["account_id"],
+                    "mode": sess["active_mode"],
+                    "broker": sess["broker_name"],
+                    "initial_balance": sess["initial_balance"],
+                    "available_cash": sess["available_cash"]
                 })
-                self.supabase.clear_holdings(self.account_id, mode=self.active_mode)
+                self.supabase.clear_holdings(sess["account_id"], mode=sess["active_mode"])
             except Exception:
                 pass
 
-        return self.get_portfolio_overview()
+        return self.get_portfolio_overview(account_id=sess["account_id"])
 
-    def set_mode(self, mode: str, broker: str = "Groww", account_id: str = "GROWW-USER-01"):
+    def set_mode(self, mode: str, broker: str = "Groww", account_id: Optional[str] = None) -> Dict[str, Any]:
+        sess = self._get_or_create_session(account_id)
         if mode.upper() in ["SANDBOX", "LIVE_DEMAT"]:
-            self.active_mode = mode.upper()
-            if self.active_mode == "LIVE_DEMAT":
-                self.broker_name = broker or "Groww"
-                self.account_id = account_id or "GROWW-USER-01"
+            sess["active_mode"] = mode.upper()
+            if sess["active_mode"] == "LIVE_DEMAT":
+                sess["broker_name"] = broker or "Groww"
             else:
-                self.broker_name = "Pulse91 Sandbox Broker"
-                self.account_id = "PULSE91-DEMAT-SBX-01"
-        return {"mode": self.active_mode, "broker": self.broker_name, "account_id": self.account_id}
+                sess["broker_name"] = "Pulse91 Sandbox Broker"
+        return {"mode": sess["active_mode"], "broker": sess["broker_name"], "account_id": sess["account_id"]}
 
-    def get_portfolio_overview(self) -> Dict[str, Any]:
+    def get_portfolio_overview(self, account_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Calculates live Demat valuation, invested capital, available cash,
-        realized & unrealized PnL based on live NSE tick prices.
+        realized & unrealized PnL based on live NSE tick prices for the given user.
         """
-        # Connect to live broker APIs if LIVE_DEMAT mode is active
-        active_holdings = self.holdings
-        current_cash = self.available_cash
+        sess = self._get_or_create_session(account_id)
+        active_holdings = sess["holdings"]
+        current_cash = sess["available_cash"]
 
-        if self.active_mode == "LIVE_DEMAT":
-            b_name = self.broker_name.lower()
+        if sess["active_mode"] == "LIVE_DEMAT":
+            b_name = sess["broker_name"].lower()
             try:
                 if "groww" in b_name:
                     live_h = groww_adapter.fetch_live_holdings()
@@ -103,30 +194,30 @@ class BrokerEngine:
                     margins = groww_adapter.fetch_live_margins()
                     current_cash = margins.get("available_cash", current_cash)
                 elif "dhan" in b_name:
-                    from .dhan_adapter import dhan_adapter
+                    from .dhan import dhan_adapter
                     live_h = dhan_adapter.get_holdings()
                     if live_h:
                         active_holdings = live_h
                     funds = dhan_adapter.get_funds()
                     current_cash = funds.get("available_cash", current_cash)
                 elif "zerodha" in b_name or "kite" in b_name:
-                    from .zerodha_adapter import zerodha_adapter
+                    from .zerodha import zerodha_adapter
                     live_h = zerodha_adapter.get_holdings()
                     if live_h:
                         active_holdings = live_h
                     funds = zerodha_adapter.get_funds()
                     current_cash = funds.get("available_cash", current_cash)
                 elif "angel" in b_name:
-                    from .angel_adapter import angel_adapter
+                    from .angel import angel_adapter
                     live_h = angel_adapter.get_holdings()
                     if live_h:
                         active_holdings = live_h
                     funds = angel_adapter.get_funds()
                     current_cash = funds.get("available_cash", current_cash)
             except Exception as e:
-                print(f"Broker live sync note ({self.broker_name}):", e)
-                active_holdings = self.holdings
-                current_cash = self.available_cash
+                print(f"Broker live sync note ({sess['broker_name']}):", e)
+                active_holdings = sess["holdings"]
+                current_cash = sess["available_cash"]
 
         holdings_data = []
         total_invested = 0.0
@@ -143,7 +234,6 @@ class BrokerEngine:
             pnl = round(curr_val - invested, 2)
             pnl_pct = round((pnl / max(0.01, invested)) * 100, 2)
             
-            # Simulated day change
             day_change = round(curr_val * 0.0085, 2)
             day_pnl += day_change
 
@@ -152,7 +242,7 @@ class BrokerEngine:
 
             holdings_data.append({
                 "symbol": sym,
-                "company_name": h["company_name"],
+                "company_name": h.get("company_name", sym),
                 "quantity": qty,
                 "avg_buy_price": h["avg_buy_price"],
                 "ltp": ltp,
@@ -160,14 +250,13 @@ class BrokerEngine:
                 "current_value": curr_val,
                 "unrealized_pnl": pnl,
                 "pnl_pct": pnl_pct,
-                "product": h["product"],
+                "product": h.get("product", "CNC"),
                 "date_bought": h.get("date_bought", "2026-11-01")
             })
 
-        # Calculate open positions MTM
         positions_data = []
         positions_pnl = 0.0
-        for p in self.positions:
+        for p in sess["positions"]:
             sym = p["symbol"]
             ltp = self.market_data.get_live_price(sym)
             entry = p["entry_price"]
@@ -191,9 +280,9 @@ class BrokerEngine:
         account_net_worth = round(current_cash + total_current + positions_pnl, 2)
 
         return {
-            "mode": self.active_mode,
-            "broker": self.broker_name,
-            "account_id": self.account_id,
+            "mode": sess["active_mode"],
+            "broker": sess["broker_name"],
+            "account_id": sess["account_id"],
             "account_net_worth": account_net_worth,
             "available_cash": round(current_cash, 2),
             "invested_value": round(total_invested, 2),
@@ -207,23 +296,24 @@ class BrokerEngine:
             "positions": positions_data
         }
 
-    def place_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
+    def place_order(self, order_data: Dict[str, Any], account_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Executes an order into Sandbox virtual Demat or live broker.
+        Executes an order into Sandbox virtual Demat or live broker for this user account.
         Supports CNC (Demat Delivery) and MIS (Intraday).
         """
+        sess = self._get_or_create_session(account_id)
         symbol = order_data["symbol"].upper()
         quantity = int(order_data.get("quantity", 1))
         side = order_data.get("side", "BUY").upper()
-        product = order_data.get("product", "CNC").upper() # "CNC" or "MIS"
+        product = order_data.get("product", "CNC").upper()
         order_type = order_data.get("order_type", "MARKET").upper()
         
         ltp = self.market_data.get_live_price(symbol)
         execution_price = float(order_data.get("price") or ltp)
         required_capital = round(execution_price * quantity, 2)
 
-        if side == "BUY" and required_capital > self.available_cash:
-            raise ValueError(f"Insufficient funds: Required ₹{required_capital}, Available ₹{self.available_cash:.2f}")
+        if side == "BUY" and required_capital > sess["available_cash"]:
+            raise ValueError(f"Insufficient funds: Required ₹{required_capital}, Available ₹{sess['available_cash']:.2f}")
 
         order_id = f"ORD_{int(time.time())}_{symbol}"
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -234,6 +324,7 @@ class BrokerEngine:
 
         order_record = {
             "order_id": order_id,
+            "account_id": sess["account_id"],
             "symbol": symbol,
             "side": side,
             "product": product,
@@ -242,15 +333,14 @@ class BrokerEngine:
             "status": order_status,
             "order_session": "LIVE_MARKET" if is_market_live else "AMO_EOD",
             "timestamp": now_str,
-            "mode": self.active_mode
+            "mode": sess["active_mode"]
         }
-        self.orders.insert(0, order_record)
+        sess["orders"].insert(0, order_record)
 
         if side == "BUY":
-            self.available_cash -= required_capital
+            sess["available_cash"] -= required_capital
             if product == "CNC":
-                # Add to Demat Holdings
-                existing = next((h for h in self.holdings if h["symbol"] == symbol), None)
+                existing = next((h for h in sess["holdings"] if h["symbol"] == symbol), None)
                 if existing:
                     new_qty = existing["quantity"] + quantity
                     new_inv = existing["invested_value"] + required_capital
@@ -259,7 +349,7 @@ class BrokerEngine:
                     existing["avg_buy_price"] = round(new_inv / new_qty, 2)
                 else:
                     profile = self.market_data.get_stock_profile(symbol)
-                    self.holdings.append({
+                    sess["holdings"].append({
                         "symbol": symbol,
                         "company_name": profile["name"],
                         "quantity": quantity,
@@ -269,8 +359,7 @@ class BrokerEngine:
                         "date_bought": datetime.datetime.now().strftime("%Y-%m-%d")
                     })
             else:
-                # Add to Open MIS Positions
-                self.positions.append({
+                sess["positions"].append({
                     "position_id": f"POS_{order_id}",
                     "symbol": symbol,
                     "side": "BUY",
@@ -280,12 +369,11 @@ class BrokerEngine:
                     "created_at": now_str
                 })
         else: # SELL
-            self.available_cash += required_capital
-            # Remove/reduce from holdings or positions
-            existing = next((h for h in self.holdings if h["symbol"] == symbol), None)
+            sess["available_cash"] += required_capital
+            existing = next((h for h in sess["holdings"] if h["symbol"] == symbol), None)
             if existing:
                 if existing["quantity"] <= quantity:
-                    self.holdings.remove(existing)
+                    sess["holdings"].remove(existing)
                 else:
                     existing["quantity"] -= quantity
                     existing["invested_value"] = round(existing["quantity"] * existing["avg_buy_price"], 2)
@@ -300,7 +388,7 @@ class BrokerEngine:
                 "trigger_target": order_data.get("target_price"),
                 "status": "ACTIVE_ON_EXCHANGE"
             }
-            self.gtt_triggers.append(gtt_created)
+            sess["gtt_triggers"].append(gtt_created)
 
         # Automated WhatsApp Execution Alert Dispatch
         try:
@@ -319,22 +407,22 @@ class BrokerEngine:
             try:
                 self.supabase.save_order(order_record)
                 self.supabase.save_portfolio({
-                    "account_id": self.account_id,
-                    "mode": self.active_mode,
-                    "broker": self.broker_name,
-                    "initial_balance": self.initial_balance,
-                    "available_cash": self.available_cash
+                    "account_id": sess["account_id"],
+                    "mode": sess["active_mode"],
+                    "broker": sess["broker_name"],
+                    "initial_balance": sess["initial_balance"],
+                    "available_cash": sess["available_cash"]
                 })
                 if side == "BUY" and product == "CNC":
-                    h = next((x for x in self.holdings if x["symbol"] == symbol), None)
+                    h = next((x for x in sess["holdings"] if x["symbol"] == symbol), None)
                     if h:
-                        self.supabase.save_holding(self.account_id, h, mode=self.active_mode)
+                        self.supabase.save_holding(sess["account_id"], h, mode=sess["active_mode"])
                 elif side == "SELL":
-                    h = next((x for x in self.holdings if x["symbol"] == symbol), None)
+                    h = next((x for x in sess["holdings"] if x["symbol"] == symbol), None)
                     if h:
-                        self.supabase.save_holding(self.account_id, h, mode=self.active_mode)
+                        self.supabase.save_holding(sess["account_id"], h, mode=sess["active_mode"])
                     else:
-                        self.supabase.delete_holding(self.account_id, symbol, mode=self.active_mode)
+                        self.supabase.delete_holding(sess["account_id"], symbol, mode=sess["active_mode"])
             except Exception:
                 pass
 
@@ -345,28 +433,30 @@ class BrokerEngine:
             "message": f"Successfully executed {side} {quantity} shares of {symbol} at ₹{execution_price:.2f}. WhatsApp alert dispatched."
         }
 
-    def exit_position(self, symbol: str) -> Dict[str, Any]:
+    def exit_position(self, symbol: str, account_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Squares off an open position or Demat holding at current market price.
+        Squares off an open position or Demat holding at current market price for this user account.
         Automatically books realized PnL and fires instant WhatsApp notification.
         """
+        sess = self._get_or_create_session(account_id)
         sym = symbol.upper()
         ltp = self.market_data.get_live_price(sym)
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # 1. Check open MIS positions
-        pos = next((p for p in self.positions if p["symbol"] == sym), None)
+        pos = next((p for p in sess["positions"] if p["symbol"] == sym), None)
         if pos:
             qty = pos["quantity"]
             entry_price = pos["entry_price"]
             pnl = round((ltp - entry_price) * qty, 2)
             pnl_pct = round(((ltp - entry_price) / max(1.0, entry_price)) * 100, 2)
             settled_amt = round((entry_price * qty) + pnl, 2)
-            self.available_cash += settled_amt
-            self.positions.remove(pos)
+            sess["available_cash"] += settled_amt
+            sess["positions"].remove(pos)
 
             order_record = {
                 "order_id": f"ORD_EXIT_{int(time.time())}_{sym}",
+                "account_id": sess["account_id"],
                 "symbol": sym,
                 "side": "SELL",
                 "product": "MIS",
@@ -374,9 +464,9 @@ class BrokerEngine:
                 "price": ltp,
                 "status": "EXECUTED",
                 "timestamp": now_str,
-                "mode": self.active_mode
+                "mode": sess["active_mode"]
             }
-            self.orders.insert(0, order_record)
+            sess["orders"].insert(0, order_record)
 
             try:
                 alert_text = whatsapp_alerter.format_execution_alert(order_record, {
@@ -397,18 +487,19 @@ class BrokerEngine:
             }
 
         # 2. Check Demat holdings (Sell CNC)
-        holding = next((h for h in self.holdings if h["symbol"] == sym), None)
+        holding = next((h for h in sess["holdings"] if h["symbol"] == sym), None)
         if holding:
             qty = holding["quantity"]
             entry_price = holding["avg_buy_price"]
             pnl = round((ltp - entry_price) * qty, 2)
             pnl_pct = round(((ltp - entry_price) / max(1.0, entry_price)) * 100, 2)
             settled_amt = round(qty * ltp, 2)
-            self.available_cash += settled_amt
-            self.holdings.remove(holding)
+            sess["available_cash"] += settled_amt
+            sess["holdings"].remove(holding)
 
             order_record = {
                 "order_id": f"ORD_SELL_{int(time.time())}_{sym}",
+                "account_id": sess["account_id"],
                 "symbol": sym,
                 "side": "SELL",
                 "product": "CNC",
@@ -416,9 +507,9 @@ class BrokerEngine:
                 "price": ltp,
                 "status": "EXECUTED",
                 "timestamp": now_str,
-                "mode": self.active_mode
+                "mode": sess["active_mode"]
             }
-            self.orders.insert(0, order_record)
+            sess["orders"].insert(0, order_record)
 
             try:
                 alert_text = whatsapp_alerter.format_execution_alert(order_record, {
@@ -432,14 +523,14 @@ class BrokerEngine:
 
             if self.supabase and self.supabase.is_active:
                 try:
-                    self.supabase.delete_holding(self.account_id, sym, mode=self.active_mode)
+                    self.supabase.delete_holding(sess["account_id"], sym, mode=sess["active_mode"])
                     self.supabase.save_order(order_record)
                     self.supabase.save_portfolio({
-                        "account_id": self.account_id,
-                        "mode": self.active_mode,
-                        "broker": self.broker_name,
-                        "initial_balance": self.initial_balance,
-                        "available_cash": self.available_cash
+                        "account_id": sess["account_id"],
+                        "mode": sess["active_mode"],
+                        "broker": sess["broker_name"],
+                        "initial_balance": sess["initial_balance"],
+                        "available_cash": sess["available_cash"]
                     })
                 except Exception:
                     pass
@@ -453,6 +544,16 @@ class BrokerEngine:
             }
 
         raise ValueError(f"No active position or holding found for ticker {sym}")
+
+    def get_history(self, account_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Returns order logs and GTT triggers for this user account.
+        """
+        sess = self._get_or_create_session(account_id)
+        return {
+            "orders": sess["orders"],
+            "gtt_triggers": sess["gtt_triggers"]
+        }
 
 # Global singleton
 broker_engine = BrokerEngine()

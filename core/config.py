@@ -6,7 +6,6 @@ Loads and validates environment variables from .env.
 
 import os
 from pathlib import Path
-from typing import Optional
 from dotenv import load_dotenv
 
 # Load .env file from project root
@@ -20,24 +19,10 @@ class Settings:
     HOST: str = os.getenv("HOST", "0.0.0.0")
 
     # Supabase PostgreSQL Configuration
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "").strip()
-    SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "").strip()
+    SUPABASE_URL: str = (os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL") or "").strip()
+    SUPABASE_KEY: str = (os.getenv("SUPABASE_KEY") or os.getenv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY") or "").strip()
 
-    # Broker API Credentials (Optional - Default Sandbox)
-    GROWW_API_KEY: Optional[str] = os.getenv("GROWW_API_KEY")
-    GROWW_API_SECRET: Optional[str] = os.getenv("GROWW_API_SECRET")
-
-    DHAN_CLIENT_ID: Optional[str] = os.getenv("DHAN_CLIENT_ID")
-    DHAN_ACCESS_TOKEN: Optional[str] = os.getenv("DHAN_ACCESS_TOKEN")
-
-    ZERODHA_API_KEY: Optional[str] = os.getenv("ZERODHA_API_KEY")
-    ZERODHA_API_SECRET: Optional[str] = os.getenv("ZERODHA_API_SECRET")
-
-    # WhatsApp & Webhook Alerts (Optional)
-    WHATSAPP_PHONE: Optional[str] = os.getenv("WHATSAPP_PHONE")
-    WHATSAPP_WEBHOOK_URL: Optional[str] = os.getenv("WHATSAPP_WEBHOOK_URL")
-
-    # Financial / Sandbox Settings
+    # Financial / Sandbox Defaults
     DEFAULT_SANDBOX_CAPITAL: float = 10000.00
     MAX_CAPITAL_PER_TRADE: float = 3000.00
     MAX_OPEN_POSITIONS: int = 3
