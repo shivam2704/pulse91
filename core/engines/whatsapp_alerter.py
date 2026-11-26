@@ -117,10 +117,11 @@ class WhatsAppAlerter:
         target_phone = phone_number or self.default_phone
         if not target_phone:
             return {
-                "success": False,
+                "success": True,
+                "status": "SKIPPED_NO_PHONE",
                 "channel": "WhatsApp",
                 "recipient": None,
-                "message": "WhatsApp number not linked. Please configure in settings."
+                "message": "Notification skipped: No WhatsApp phone configured (optional)."
             }
 
         target_webhook = webhook_url or self.webhook_url

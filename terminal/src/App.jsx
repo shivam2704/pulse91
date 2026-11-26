@@ -46,7 +46,7 @@ export default function App() {
     fetch('/api/v1/alerts/config')
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && data.phone_number && data.phone_number !== '+919876543210') {
+        if (data.success && data.phone_number) {
           setWhatsAppPhone(data.phone_number);
           localStorage.setItem('pulse91_whatsapp_phone', data.phone_number);
         } else {

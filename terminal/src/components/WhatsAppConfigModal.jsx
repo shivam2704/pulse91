@@ -24,14 +24,22 @@ export default function WhatsAppConfigModal({
 
   const handleSave = async (e) => {
     if (e) e.preventDefault();
-    if (!phoneNumber.trim()) {
-      setStatusMessage({ type: 'error', text: 'Please enter a valid 10-digit WhatsApp number.' });
-      return;
-    }
-
     setIsSaving(true);
     setStatusMessage(null);
     try {
+      if (!phoneNumber.trim()) {
+        localStorage.removeItem('pulse91_whatsapp_phone');
+        onUpdatePhone('');
+        await fetch('/api/v1/alerts/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone_number: '' })
+        });
+        setStatusMessage({ type: 'success', text: 'WhatsApp notifications disabled.' });
+        setTimeout(() => onClose(), 800);
+        return;
+      }
+
       const res = await fetch('/api/v1/alerts/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,10 +49,10 @@ export default function WhatsAppConfigModal({
       if (data.success) {
         localStorage.setItem('pulse91_whatsapp_phone', cleanPhoneFull);
         onUpdatePhone(cleanPhoneFull);
-        setStatusMessage({ type: 'success', text: `WhatsApp successfully linked to ${cleanPhoneFull}!` });
+        setStatusMessage({ type: 'success', text: `WhatsApp linked to ${cleanPhoneFull}!` });
         setTimeout(() => {
           onClose();
-        }, 1200);
+        }, 1000);
       } else {
         setStatusMessage({ type: 'error', text: data.detail || 'Failed to link WhatsApp.' });
       }

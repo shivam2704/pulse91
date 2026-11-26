@@ -87,10 +87,10 @@ def test_order_execution_and_exit():
     assert buy_res.status_code == 200
     print(f"✓ /api/v1/trade/order passed: Placed buy order for BEL (Qty: 10)")
 
-    # 2. Place an intraday MIS order
+    # 2. Place an intraday MIS order (calibrated to ₹10k sandbox capital)
     mis_payload = {
         "symbol": "TATASTEEL",
-        "quantity": 50,
+        "quantity": 10,
         "side": "BUY",
         "product": "MIS",
         "price": 148.5,

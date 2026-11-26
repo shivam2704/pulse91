@@ -96,23 +96,24 @@ export default function HeaderNavbar({
 
         {/* Demat Connect, WhatsApp Notifications & Portfolio Stats */}
         <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
-          {/* Interactive WhatsApp Alerts Gateway Link */}
+          {/* Interactive WhatsApp Alerts Gateway Link (Optional) */}
           <button
             onClick={onOpenWhatsAppModal}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all whitespace-nowrap shrink-0 ${
               whatsAppPhone
                 ? 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                : 'bg-[#121824] hover:bg-[#1a2336] border-[#1e2638] text-gray-300 hover:text-white'
+                : 'bg-[#121824] hover:bg-[#1a2336] border-[#1e2638] text-gray-400 hover:text-white'
             }`}
-            title="Configure or test WhatsApp Instant Trade Execution Receipts"
+            title="Configure optional WhatsApp Trade Notifications (Not required)"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="font-semibold">
-              {whatsAppPhone ? 'WhatsApp' : 'Link WhatsApp'}
-            </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#162235] text-emerald-400 border border-emerald-500/20 uppercase font-sans">
-              {whatsAppPhone ? 'Active' : 'Setup'}
+            {whatsAppPhone ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+            )}
+            <MessageSquare className={`w-3.5 h-3.5 ${whatsAppPhone ? 'text-emerald-400' : 'text-gray-400'}`} />
+            <span>
+              {whatsAppPhone ? 'WhatsApp Linked' : 'Alerts (Optional)'}
             </span>
           </button>
 

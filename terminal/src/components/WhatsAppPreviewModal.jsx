@@ -90,12 +90,13 @@ export default function WhatsAppPreviewModal({
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+91..."
-              className="flex-1 bg-[#141a29] border border-[#222b40] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none"
+              placeholder="Enter mobile number (optional)..."
+              className="flex-1 bg-[#141a29] border border-[#222b40] rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none placeholder:text-gray-500"
             />
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 bg-[#161d2d] hover:bg-[#1e273d] text-gray-200 border border-[#253047] px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors"
+              title="Copy formatted alert to clipboard"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
               <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -104,11 +105,13 @@ export default function WhatsAppPreviewModal({
 
           <button
             onClick={handleSend}
-            disabled={sending}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg disabled:opacity-50"
+            disabled={sending || !phone.trim()}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="w-3.5 h-3.5" />
-            <span>{sentSuccess ? '✓ Alert Queued for WhatsApp Dispatch' : sending ? 'Dispatching...' : 'Dispatch Live WhatsApp Alert'}</span>
+            <span>
+              {sentSuccess ? '✓ Alert Queued for WhatsApp Dispatch' : sending ? 'Dispatching...' : phone.trim() ? 'Dispatch Live WhatsApp Alert' : 'Enter Number Above to Dispatch Alert'}
+            </span>
           </button>
         </div>
       </div>
