@@ -255,11 +255,18 @@ class MarketDataEngine:
                 data = json.loads(resp.read().decode())
                 meta = data["chart"]["result"][0]["meta"]
                 ltp = float(meta.get("regularMarketPrice", 25884.50))
-                prev_close = float(meta.get("chartPreviousClose") or meta.get("previousClose", ltp))
-                change_pct = round(((ltp - prev_close) / max(1.0, prev_close)) * 100, 2)
+                
+                # Official exchange percentage change directly from feed
+                official_pct = meta.get("regularMarketChangePercent")
+                if official_pct is not None:
+                    change_pct = round(float(official_pct), 2)
+                else:
+                    prev_close = float(meta.get("previousClose", ltp))
+                    change_pct = round(((ltp - prev_close) / max(1.0, prev_close)) * 100, 2)
+
                 res = {
                     "ltp": ltp,
-                    "previous_close": prev_close,
+                    "previous_close": float(meta.get("chartPreviousClose") or meta.get("previousClose", ltp)),
                     "change_pct": change_pct
                 }
                 self._nifty_cache = {"data": res, "timestamp": now}
@@ -269,7 +276,7 @@ class MarketDataEngine:
             if self._nifty_cache.get("data"):
                 return self._nifty_cache["data"]
             # Fallback to realistic current NSE index range
-            return {"ltp": 25884.50, "previous_close": 25349.70, "change_pct": 2.11}
+            return {"ltp": 25884.50, "previous_close": 25819.25, "change_pct": 0.25}
 
     def _init_live_prices(self):
         # Set dynamic initial live prices
