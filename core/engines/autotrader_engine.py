@@ -54,14 +54,58 @@ class AutoTraderEngine:
             }
         ]
 
+    def _sync_with_holdings(self):
+        """Auto-registers existing Demat holdings into Auto-Trader surveillance roster"""
+        for h in broker_engine.holdings:
+            sym = h["symbol"].upper()
+            if sym not in self.managed_positions:
+                buy = h.get("avg_buy_price", 100.0)
+                self.register_position(
+                    symbol=sym,
+                    quantity=h["quantity"],
+                    entry_price=buy,
+                    target_1=round(buy * 1.0555, 2),
+                    target_2=round(buy * 1.0888, 2),
+                    stop_loss=round(buy * 0.9722, 2)
+                )
+
     def get_status(self) -> Dict[str, Any]:
+        self._sync_with_holdings()
+        detailed_positions = []
+        for sym, pos in self.managed_positions.items():
+            ltp = market_data_engine.get_live_price(sym, fallback_price=pos["entry_price"])
+            entry = pos["entry_price"]
+            t1 = pos["target_1"]
+            sl = pos["stop_loss"]
+            pnl = round((ltp - entry) * pos["quantity"], 2)
+            pnl_pct = round(((ltp - entry) / (entry or 1)) * 100, 2)
+            dist_to_t1 = round(((t1 - ltp) / ltp) * 100, 2)
+            dist_to_sl = round(((ltp - sl) / ltp) * 100, 2)
+
+            if dist_to_t1 <= 0.8:
+                health = "NEAR_TARGET"
+            elif dist_to_sl <= 0.8:
+                health = "NEAR_STOP_LOSS"
+            else:
+                health = "MONITORING"
+
+            detailed_positions.append({
+                **pos,
+                "current_ltp": ltp,
+                "unrealized_pnl": pnl,
+                "unrealized_pnl_pct": pnl_pct,
+                "dist_to_target_pct": dist_to_t1,
+                "dist_to_sl_pct": dist_to_sl,
+                "health": health
+            })
+
         return {
             "is_active": self.is_active,
             "max_capital_per_trade": self.max_capital_per_trade,
             "max_open_positions": self.max_open_positions,
             "active_managed_count": len(self.managed_positions),
             "notification_phone": self.notification_phone,
-            "managed_positions": list(self.managed_positions.values()),
+            "managed_positions": detailed_positions,
             "recent_logs": self.execution_logs[:10]
         }
 
@@ -70,6 +114,8 @@ class AutoTraderEngine:
             self.is_active = active
         else:
             self.is_active = not self.is_active
+        if self.is_active:
+            self._sync_with_holdings()
         return self.is_active
 
     def set_config(self, max_capital: Optional[float] = None, max_positions: Optional[int] = None, phone: Optional[str] = None):
@@ -231,7 +277,8 @@ class AutoTraderEngine:
         # -------------------------------------------------------------
         if len(self.managed_positions) < self.max_open_positions:
             top_scan = self.index_scanner.run_monday_8am_scan()
-            for pick in top_scan.get("rankings", [])[:5]: # Top 5 highest conviction setups
+            candidates = top_scan.get("picks") or top_scan.get("rankings") or []
+            for pick in candidates[:5]: # Top 5 highest conviction setups
                 sym = pick["symbol"]
                 if sym in self.managed_positions:
                     continue

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Play, Pause, RefreshCw, ShieldAlert, Target, ShoppingBag, ArrowUpRight, TrendingUp, TrendingDown, CheckCircle2, AlertCircle, PhoneCall } from 'lucide-react';
+import { Zap, Play, Pause, RefreshCw, ShieldAlert, Target, ShoppingBag, ArrowUpRight, TrendingUp, TrendingDown, CheckCircle2, AlertCircle, PhoneCall, ShieldCheck } from 'lucide-react';
 
 export default function PortfolioPositionsPanel({
   demat,
@@ -143,6 +143,116 @@ export default function PortfolioPositionsPanel({
             )}
           </div>
         </div>
+      </div>
+
+      {/* 1.5 Auto-Trader Live Surveillance Roster */}
+      <div className="bg-[#0c101a] border border-[#1b2336] rounded-xl p-5 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-[#1b2336] gap-2 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Auto-Trader Active Surveillance Roster</span>
+              <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
+                {managed.length} Positions Under Live Surveillance
+              </span>
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Live tick monitoring. Daemon automatically sells at Target 1 (+5.55%) or executes Stop-Loss (-2.78%) defense.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-mono font-semibold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+              isActive
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+              {isActive ? 'Live Monitoring Active' : 'Auto-Execution Paused'}
+            </span>
+          </div>
+        </div>
+
+        {managed.length === 0 ? (
+          <div className="py-6 text-center text-gray-500 font-mono text-xs bg-[#090d16] rounded-lg border border-[#151c2d]">
+            No stocks currently under Auto-Trader surveillance. Click "Activate Auto-Trader" above to auto-sync your Demat holdings.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {managed.map((m) => {
+              const ltp = m.current_ltp || m.entry_price;
+              const pnl = m.unrealized_pnl ?? ((ltp - m.entry_price) * m.quantity);
+              const pnlPct = m.unrealized_pnl_pct ?? (((ltp - m.entry_price) / (m.entry_price || 1)) * 100);
+              const isProfit = pnl >= 0;
+
+              return (
+                <div
+                  key={m.symbol}
+                  onClick={() => onSelectStock && onSelectStock(m.symbol)}
+                  className="bg-[#101522] border border-[#1e273c] hover:border-emerald-500/40 rounded-xl p-3.5 transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-[#182133]">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-white group-hover:text-emerald-400 transition-colors">
+                        {m.symbol}
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-400 bg-[#161d2d] px-1.5 py-0.5 rounded">
+                        {m.quantity} Qty
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                      m.health === 'NEAR_TARGET'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse'
+                        : m.health === 'NEAR_STOP_LOSS'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                        : 'bg-[#151e2f] text-gray-300 border border-[#223048]'
+                    }`}>
+                      {m.health === 'NEAR_TARGET' ? '🎯 Near Target' : (m.health === 'NEAR_STOP_LOSS' ? '⚠️ Near SL' : '● Safe & Active')}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-2.5 font-mono text-xs">
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase">Entry / LTP</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-gray-400">₹{m.entry_price?.toFixed(2)}</span>
+                        <span className="text-gray-600">→</span>
+                        <strong className="text-white font-bold">₹{ltp?.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-gray-400 block uppercase">PnL</span>
+                      <strong className={`font-bold block mt-0.5 ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {pnl > 0 ? '+' : ''}₹{pnl.toFixed(2)} ({pnlPct > 0 ? '+' : ''}{pnlPct.toFixed(2)}%)
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-2.5 pt-2 border-t border-[#182133] font-mono text-[11px]">
+                    <div className="p-1.5 bg-[#0a0e17] rounded border border-emerald-500/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400 text-[9px] uppercase">Target 1</span>
+                        <span className="text-emerald-400 text-[10px] font-bold">₹{m.target_1?.toFixed(2)}</span>
+                      </div>
+                      <span className="text-[9px] text-emerald-400/80 block mt-0.5">
+                        {m.dist_to_target_pct > 0 ? `${m.dist_to_target_pct}% away` : 'Reached!'}
+                      </span>
+                    </div>
+
+                    <div className="p-1.5 bg-[#0a0e17] rounded border border-rose-500/20">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400 text-[9px] uppercase">Stop-Loss</span>
+                        <span className="text-rose-400 text-[10px] font-bold">₹{m.stop_loss?.toFixed(2)}</span>
+                      </div>
+                      <span className="text-[9px] text-rose-400/80 block mt-0.5">
+                        {m.dist_to_sl_pct > 0 ? `${m.dist_to_sl_pct}% buffer` : 'Breached!'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 2. Demat Holdings & Open Positions (With Explicit SELL Buttons) */}

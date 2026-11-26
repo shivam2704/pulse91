@@ -341,6 +341,14 @@ export default function App() {
       if (res.ok) {
         const json = await res.json();
         setAutotrader(json.status);
+        const isNowActive = json.status?.is_active ?? json.is_active;
+        setOrderToast({
+          type: isNowActive ? 'BUY' : 'EXIT',
+          message: isNowActive
+            ? '🤖 Auto-Trader Daemon ACTIVATED: Monitoring breakouts, Target (+5.55%) & Stop-Loss (-2.78%)'
+            : '⏸️ Auto-Trader Daemon PAUSED: Autonomous order execution is on hold'
+        });
+        setTimeout(() => setOrderToast(null), 5000);
       }
     } catch (e) {}
   };
@@ -352,6 +360,14 @@ export default function App() {
         const json = await res.json();
         setAutotrader(json.status);
         fetchDemat();
+        const events = json.events || [];
+        setOrderToast({
+          type: 'BUY',
+          message: events.length > 0
+            ? `⚡ Auto-Trader Cycle: ${events.length} position action(s) executed!`
+            : '⚡ Auto-Trader Evaluation Cycle Completed: All positions safely monitored'
+        });
+        setTimeout(() => setOrderToast(null), 5000);
       }
     } catch (e) {}
   };
