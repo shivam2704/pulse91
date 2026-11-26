@@ -236,6 +236,7 @@ class MarketDataEngine:
         self._price_timestamp_cache: Dict[str, float] = {}
         self._nifty_cache: Dict[str, Any] = {"data": None, "timestamp": 0}
         self._nifty_candle_cache: Dict[str, Dict[str, Any]] = {}
+        self._stock_candle_cache: Dict[str, Dict[str, Any]] = {}
         self._fii_dii_cache: Dict[str, Any] = {"data": None, "timestamp": 0}
         self._init_live_prices()
 
@@ -443,16 +444,18 @@ class MarketDataEngine:
             "trading_hours": "09:15 - 15:30 IST"
         }
 
-    def _fetch_nifty_candles(self, timeframe: str = "D") -> Optional[List[Dict[str, Any]]]:
+    def _fetch_stock_candles(self, symbol: str, timeframe: str = "D") -> Optional[List[Dict[str, Any]]]:
         """
-        Fetches official NIFTY 50 (^NSEI) historical OHLCV candlestick data
-        from exchange feeds with caching.
+        Fetches official historical OHLCV candlestick data for any NSE stock or index
+        directly from exchange feeds with caching.
         """
+        sym = symbol.upper().replace(".NS", "").replace(" ", "")
+        cache_key = f"{sym}_{timeframe}"
         now = time.time()
         market_open = is_nse_market_open()
-        cache_duration = 60.0 if market_open else 600.0
+        cache_duration = 60.0 if market_open else 1800.0
 
-        cached = self._nifty_candle_cache.get(timeframe)
+        cached = self._stock_candle_cache.get(cache_key)
         if cached and (now - cached.get("timestamp", 0) < cache_duration):
             return cached.get("candles")
 
@@ -463,8 +466,21 @@ class MarketDataEngine:
             "W": ("1wk", "2y")
         }
         interval, range_ = tf_map.get(timeframe, ("1d", "1y"))
+
+        # Map Index vs Stock ticker symbol format
+        if sym in ["NIFTY_50", "NIFTY50", "NIFTY", "^NSEI"]:
+            target_symbol = "%5ENSEI"
+        elif sym in ["NIFTY_BANK", "BANKNIFTY", "NIFTYBANK"]:
+            target_symbol = "%5ENSEBANK"
+        elif sym in ["NIFTY_IT", "NIFTYIT"]:
+            target_symbol = "%5ECNXIT"
+        elif sym in ["NIFTY_AUTO"]:
+            target_symbol = "%5ECNXAUTO"
+        else:
+            target_symbol = f"{sym}.NS"
+
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval={interval}&range={range_}"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{target_symbol}?interval={interval}&range={range_}"
             req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
             with urllib.request.urlopen(req, timeout=4.0) as resp:
                 data = json.loads(resp.read().decode())
@@ -499,28 +515,22 @@ class MarketDataEngine:
                     c["ma50"] = round(sum(closes[i - 49 : i + 1]) / 50.0, 2) if i >= 49 else None
                     c["ma200"] = round(sum(closes[i - 199 : i + 1]) / 200.0, 2) if i >= 199 else None
 
-                self._nifty_candle_cache[timeframe] = {"candles": candles, "timestamp": now}
+                self._stock_candle_cache[cache_key] = {"candles": candles, "timestamp": now}
                 return candles
         except Exception as e:
-            logger.debug(f"Nifty candle fetch notice ({timeframe}): {e}")
+            logger.debug(f"Stock candle fetch notice for {sym} ({timeframe}): {e}")
             if cached and cached.get("candles"):
                 return cached["candles"]
             return None
 
     def generate_candles(self, symbol: str, timeframe: str = "D", count: int = 0) -> List[Dict[str, Any]]:
         """
-        Generates realistic multi-timeframe OHLCV candles tailored for institutional quant analysis:
-        - 15m: Intraday sessions (morning impulse, midday consolidation, afternoon momentum, ±1.5% to ±2.5% range)
-        - 1H: Swing structure (multi-day swings, pivot retests, ±3% to ±5% range)
-        - D: Daily 1-Year Minervini VCP contraction pattern with 20, 50, and 200-DMA spanning full chart
-        - W: Weekly 2-Year accumulation and primary trend structure
-        Guarantees moving averages (20, 50, 200) never wrap around or divide by partial sums.
+        Fetches real historical OHLCV exchange candles with moving averages (20, 50, 200)
+        for any Indian equity or index.
         """
-        sym = symbol.upper()
-        if sym in ["NIFTY_50", "NIFTY50", "NIFTY", "^NSEI"]:
-            real_candles = self._fetch_nifty_candles(timeframe)
-            if real_candles:
-                return real_candles
+        real_candles = self._fetch_stock_candles(symbol, timeframe)
+        if real_candles:
+            return real_candles
         current_p = self.get_live_price(sym)
         now = time.time()
 
