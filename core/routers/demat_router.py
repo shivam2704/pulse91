@@ -156,9 +156,25 @@ def get_demat_portfolio():
 def switch_demat_mode(payload: SwitchModeRequest):
     """
     Toggles between Sandbox (₹10k Virtual Demat) and Live Demat broker connection.
+    Guards against activating LIVE_DEMAT without valid authenticated credentials.
     """
     try:
-        res = broker_engine.set_mode(payload.mode, payload.broker or "DhanHQ", payload.account_id or "CLIENT_01")
+        if payload.mode.upper() == "LIVE_DEMAT":
+            b_name = (payload.broker or "Groww").upper()
+            if "GROWW" in b_name:
+                from ..engines.groww_adapter import groww_adapter
+                if not groww_adapter.api_key:
+                    raise ValueError("Groww is not authenticated. Please connect your API Key & Secret via 'Connect Broker'.")
+            elif "DHAN" in b_name:
+                from ..engines.dhan_adapter import dhan_adapter
+                if not dhan_adapter.client_id or not dhan_adapter.access_token:
+                    raise ValueError("DhanHQ is not authenticated. Please connect your Client ID & Access Token via 'Connect Broker'.")
+            elif "ZERODHA" in b_name or "KITE" in b_name:
+                from ..engines.zerodha_adapter import zerodha_adapter
+                if not zerodha_adapter.api_key:
+                    raise ValueError("Zerodha is not authenticated. Please connect your Kite API credentials via 'Connect Broker'.")
+
+        res = broker_engine.set_mode(payload.mode, payload.broker or "Groww", payload.account_id or "CLIENT_01")
         return {"success": True, **res}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

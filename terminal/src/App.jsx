@@ -254,18 +254,9 @@ export default function App() {
     fetchStockEvaluation(query, true);
   };
 
-  const handleToggleMode = async (selectedBroker = 'Groww') => {
-    const nextMode = demat?.mode === 'SANDBOX' ? 'LIVE_DEMAT' : 'SANDBOX';
+  const handleDisconnectBroker = async () => {
     try {
-      const res = await fetch('/api/v1/demat/mode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: nextMode,
-          broker: selectedBroker,
-          account_id: `${selectedBroker.toUpperCase()}-CLIENT-91`
-        })
-      });
+      const res = await fetch('/api/v1/demat/disconnect', { method: 'POST' });
       if (res.ok) {
         fetchDemat();
       }
@@ -799,8 +790,12 @@ export default function App() {
         onClose={() => setIsDematModalOpen(false)}
         portfolio={demat}
         onExitPosition={handleExitPosition}
-        onToggleMode={handleToggleMode}
         onResetSandbox={handleResetSandbox}
+        onOpenConnectBroker={() => {
+          setIsDematModalOpen(false);
+          setIsConnectBrokerOpen(true);
+        }}
+        onDisconnectBroker={handleDisconnectBroker}
       />
 
       <ConnectBrokerModal

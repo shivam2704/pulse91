@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle, RotateCcw } from 'lucide-react';
+import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle, RotateCcw, LogOut, ExternalLink } from 'lucide-react';
 
 const formatINR = (val, decimals = 2) => {
   if (val === undefined || val === null || isNaN(Number(val))) return '₹0.00';
@@ -14,8 +14,9 @@ export default function DematPortfolioModal({
   onClose,
   portfolio,
   onExitPosition,
-  onToggleMode,
-  onResetSandbox
+  onResetSandbox,
+  onOpenConnectBroker,
+  onDisconnectBroker
 }) {
   const [confirmExitTarget, setConfirmExitTarget] = useState(null);
   const [isExiting, setIsExiting] = useState(false);
@@ -58,66 +59,76 @@ export default function DematPortfolioModal({
         {/* Modal Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 border-b border-[#171f30] bg-[#0d1322]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+              isSandbox
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            }`}>
               <Wallet className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-bold text-white tracking-tight">Live Demat & Portfolio Overview</h3>
+                <h3 className="text-base font-bold text-white tracking-tight">
+                  {isSandbox ? 'Sandbox Virtual Demat Portfolio' : `Live Demat • ${broker || 'Broker'}`}
+                </h3>
                 <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
                   isSandbox
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 }`}>
-                  {mode} ({broker})
+                  {isSandbox ? 'SANDBOX MODE' : 'LIVE DEMAT CONNECTED'}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 font-mono mt-0.5">Account ID: {account_id}</p>
+              <p className="text-xs text-gray-400 font-mono mt-0.5">
+                {isSandbox ? 'Account: PULSE91-DEMAT-SBX-01 (Virtual Paper Wallet)' : `Account ID: ${account_id}`}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-center">
-            {/* Broker Selector Tabs */}
-            <div className="flex items-center bg-[#121826] p-0.5 rounded-lg border border-[#1e2638]">
-              {['Groww', 'DhanHQ', 'Zerodha'].map((b) => (
+            {isSandbox ? (
+              <>
+                {onResetSandbox && (
+                  <button
+                    disabled={isResetting}
+                    onClick={async () => {
+                      setIsResetting(true);
+                      try {
+                        await onResetSandbox();
+                      } finally {
+                        setIsResetting(false);
+                      }
+                    }}
+                    className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-1.5 whitespace-nowrap"
+                    title="Reset virtual sandbox balance back to ₹10,000"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+                    <span>Reset (₹10k)</span>
+                  </button>
+                )}
+
+                {onOpenConnectBroker && (
+                  <button
+                    onClick={onOpenConnectBroker}
+                    className="text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+                    title="Authenticate official Groww, DhanHQ, or Zerodha credentials"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Connect Real Broker</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              onDisconnectBroker && (
                 <button
-                  key={b}
-                  onClick={() => onToggleMode && onToggleMode(b)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
-                    broker?.toLowerCase().includes(b.toLowerCase())
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
+                  onClick={onDisconnectBroker}
+                  className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-1.5 whitespace-nowrap"
+                  title="Disconnect live broker session and revert to Sandbox"
                 >
-                  {b}
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Disconnect Broker</span>
                 </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => onToggleMode && onToggleMode(broker || 'Groww')}
-              className="text-xs bg-[#161d2d] hover:bg-[#1f283d] text-gray-300 hover:text-white border border-[#253047] px-3 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
-            >
-              Toggle Mode
-            </button>
-
-            {isSandbox && onResetSandbox && (
-              <button
-                disabled={isResetting}
-                onClick={async () => {
-                  setIsResetting(true);
-                  try {
-                    await onResetSandbox();
-                  } finally {
-                    setIsResetting(false);
-                  }
-                }}
-                className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-1.5 whitespace-nowrap"
-                title="Reset virtual sandbox balance back to ₹10,000"
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
-                <span>Reset (₹10k)</span>
-              </button>
+              )
             )}
 
             <button
