@@ -1,5 +1,13 @@
-import React from 'react';
-import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle } from 'lucide-react';
+
+const formatINR = (val, decimals = 2) => {
+  if (val === undefined || val === null || isNaN(Number(val))) return '₹0.00';
+  return '₹' + Number(val).toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+};
 
 export default function DematPortfolioModal({
   isOpen,
@@ -8,6 +16,9 @@ export default function DematPortfolioModal({
   onExitPosition,
   onToggleMode
 }) {
+  const [confirmExitTarget, setConfirmExitTarget] = useState(null);
+  const [isExiting, setIsExiting] = useState(false);
+
   if (!isOpen || !portfolio) return null;
 
   const {
@@ -24,39 +35,56 @@ export default function DematPortfolioModal({
     positions
   } = portfolio;
 
-  const isProfitable = (total_unrealized_pnl || 0) >= 0;
+  const isProfitable = (Number(total_unrealized_pnl) || 0) >= 0;
+  const isSandbox = mode?.toUpperCase() === 'SANDBOX';
+
+  const handleExecuteExit = async (symbol) => {
+    setIsExiting(true);
+    try {
+      if (onExitPosition) {
+        await onExitPosition(symbol);
+      }
+    } finally {
+      setIsExiting(false);
+      setConfirmExitTarget(null);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#0c101a] border border-[#20293d] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl p-6">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+      <div className="bg-[#0b0f19] border border-[#1e2638] rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
         {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#1b2336]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 border-b border-[#171f30] bg-[#0d1322]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
               <Wallet className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-white">Live Demat & Portfolio Overview</h3>
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-white tracking-tight">Live Demat & Portfolio Overview</h3>
+                <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                  isSandbox
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                }`}>
                   {mode} ({broker})
                 </span>
               </div>
-              <p className="text-xs text-gray-400 font-mono">Account ID: {account_id}</p>
+              <p className="text-xs text-gray-400 font-mono mt-0.5">Account ID: {account_id}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Broker Selector */}
-            <div className="flex items-center gap-1 bg-[#121724] p-1 rounded-lg border border-[#1e2638] text-xs">
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            {/* Broker Selector Tabs */}
+            <div className="flex items-center bg-[#121826] p-0.5 rounded-lg border border-[#1e2638]">
               {['Groww', 'DhanHQ', 'Zerodha'].map((b) => (
                 <button
                   key={b}
-                  onClick={() => onToggleMode(b)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  onClick={() => onToggleMode && onToggleMode(b)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
                     broker?.toLowerCase().includes(b.toLowerCase())
-                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                      : 'text-gray-400 hover:text-white'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+                      : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
                   {b}
@@ -65,154 +93,274 @@ export default function DematPortfolioModal({
             </div>
 
             <button
-              onClick={() => onToggleMode(broker || 'Groww')}
-              className="text-xs bg-[#161d2d] hover:bg-[#1e273d] text-gray-300 border border-[#253047] px-3 py-1.5 rounded-lg transition-colors"
+              onClick={() => onToggleMode && onToggleMode(broker || 'Groww')}
+              className="text-xs bg-[#161d2d] hover:bg-[#1f283d] text-gray-300 hover:text-white border border-[#253047] px-3 py-1.5 rounded-lg transition-colors font-medium whitespace-nowrap"
             >
-              Toggle Sandbox / Live
+              Toggle Mode
             </button>
+
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-[#161d2d] hover:bg-[#20293d] text-gray-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg bg-[#161d2d] hover:bg-[#20293d] text-gray-400 hover:text-white transition-colors border border-[#253047]"
+              title="Close Modal"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Portfolio Stats Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 my-5">
-          <div className="bg-[#121724] border border-[#1d2638] rounded-xl p-3.5">
-            <span className="text-[11px] text-gray-400 block">Total Demat Worth</span>
-            <span className="text-lg font-mono font-bold text-white">
-              ₹{account_net_worth?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="bg-[#121724] border border-[#1d2638] rounded-xl p-3.5">
-            <span className="text-[11px] text-gray-400 block">Available Cash Margin</span>
-            <span className="text-lg font-mono font-bold text-emerald-400">
-              ₹{available_cash?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="bg-[#121724] border border-[#1d2638] rounded-xl p-3.5">
-            <span className="text-[11px] text-gray-400 block">Invested Capital</span>
-            <span className="text-lg font-mono font-bold text-gray-200">
-              ₹{invested_value?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="bg-[#121724] border border-[#1d2638] rounded-xl p-3.5">
-            <span className="text-[11px] text-gray-400 block">Unrealized PnL</span>
-            <span className={`text-lg font-mono font-bold ${isProfitable ? 'text-emerald-400' : 'text-red-400'}`}>
-              {isProfitable ? '+' : ''}₹{total_unrealized_pnl?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-              <span className="text-xs ml-1 font-normal">({isProfitable ? '+' : ''}{total_unrealized_pnl_pct}%)</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Demat Holdings Table */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-              Demat Holdings ({holdings?.length || 0})
-            </h4>
-            <span className="text-[11px] text-gray-400">Delivery (CNC)</span>
-          </div>
-          <div className="overflow-x-auto border border-[#1b2336] rounded-xl">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#121724] border-b border-[#1b2336] text-gray-400 text-[11px] font-semibold">
-                <tr>
-                  <th className="py-2.5 px-3">Symbol</th>
-                  <th className="py-2.5 px-3">Qty</th>
-                  <th className="py-2.5 px-3">Avg Buy</th>
-                  <th className="py-2.5 px-3">LTP</th>
-                  <th className="py-2.5 px-3">Invested</th>
-                  <th className="py-2.5 px-3">Current Val</th>
-                  <th className="py-2.5 px-3 text-right">PnL (₹)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#161d2d]">
-                {holdings?.map((h) => {
-                  const isHoldingProfitable = (h.unrealized_pnl || 0) >= 0;
-                  return (
-                    <tr key={h.symbol} className="hover:bg-[#121724]">
-                      <td className="py-2.5 px-3 font-mono font-bold text-white">{h.symbol}</td>
-                      <td className="py-2.5 px-3 font-mono">{h.quantity}</td>
-                      <td className="py-2.5 px-3 font-mono">₹{h.avg_buy_price?.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 px-3 font-mono font-medium text-gray-200">₹{h.ltp?.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 px-3 font-mono text-gray-400">₹{h.invested_value?.toLocaleString('en-IN')}</td>
-                      <td className="py-2.5 px-3 font-mono font-semibold text-white">₹{h.current_value?.toLocaleString('en-IN')}</td>
-                      <td className={`py-2.5 px-3 font-mono text-right font-bold ${
-                        isHoldingProfitable ? 'text-emerald-400' : 'text-red-400'
-                      }`}>
-                        {isHoldingProfitable ? '+' : ''}₹{h.unrealized_pnl?.toLocaleString('en-IN')}
-                        <span className="text-[10px] block font-normal">
-                          ({isHoldingProfitable ? '+' : ''}{h.pnl_pct}%)
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Open Positions Table */}
-        {positions && positions.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                Active Open Positions ({positions.length})
-              </h4>
-              <span className="text-[11px] text-amber-400">3:12 PM Auto-Square-off Active</span>
+        <div className="p-5 space-y-6">
+          {/* Portfolio Metric Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-[#101524] border border-[#1b2336] rounded-xl p-3.5 flex flex-col justify-between">
+              <span className="text-[11px] font-medium text-gray-400">Total Demat Worth</span>
+              <span className="text-lg font-mono font-bold text-white tracking-tight mt-1 truncate">
+                {formatINR(account_net_worth)}
+              </span>
             </div>
-            <div className="overflow-x-auto border border-[#1b2336] rounded-xl">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#121724] border-b border-[#1b2336] text-gray-400 text-[11px] font-semibold">
+
+            <div className="bg-[#101524] border border-[#1b2336] rounded-xl p-3.5 flex flex-col justify-between">
+              <span className="text-[11px] font-medium text-gray-400">Available Cash Margin</span>
+              <span className="text-lg font-mono font-bold text-emerald-400 tracking-tight mt-1 truncate">
+                {formatINR(available_cash)}
+              </span>
+            </div>
+
+            <div className="bg-[#101524] border border-[#1b2336] rounded-xl p-3.5 flex flex-col justify-between">
+              <span className="text-[11px] font-medium text-gray-400">Invested Capital</span>
+              <span className="text-lg font-mono font-bold text-gray-200 tracking-tight mt-1 truncate">
+                {formatINR(invested_value)}
+              </span>
+            </div>
+
+            <div className="bg-[#101524] border border-[#1b2336] rounded-xl p-3.5 flex flex-col justify-between">
+              <span className="text-[11px] font-medium text-gray-400">Unrealized PnL</span>
+              <div className="flex items-baseline gap-1.5 mt-1 flex-wrap">
+                <span className={`text-lg font-mono font-bold whitespace-nowrap ${isProfitable ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {isProfitable ? '+' : ''}{formatINR(total_unrealized_pnl)}
+                </span>
+                <span className={`text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded whitespace-nowrap ${
+                  isProfitable ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                }`}>
+                  {isProfitable ? '+' : ''}{total_unrealized_pnl_pct}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Demat Holdings Table */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                  Demat Holdings
+                </h4>
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#161d2d] text-gray-300 border border-[#20293d]">
+                  {holdings?.length || 0}
+                </span>
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium">Delivery (CNC)</span>
+            </div>
+
+            <div className="overflow-x-auto border border-[#1b2336] rounded-xl bg-[#0e1320]">
+              <table className="w-full text-xs">
+                <thead className="bg-[#121826] border-b border-[#1b2336] text-gray-400 text-[11px] font-semibold">
                   <tr>
-                    <th className="py-2.5 px-3">Symbol</th>
-                    <th className="py-2.5 px-3">Type</th>
-                    <th className="py-2.5 px-3">Qty</th>
-                    <th className="py-2.5 px-3">Entry</th>
-                    <th className="py-2.5 px-3">LTP</th>
-                    <th className="py-2.5 px-3">PnL</th>
-                    <th className="py-2.5 px-3 text-right">Action</th>
+                    <th className="py-2.5 px-3.5 text-left">Symbol</th>
+                    <th className="py-2.5 px-3.5 text-right">Qty</th>
+                    <th className="py-2.5 px-3.5 text-right">Avg Buy</th>
+                    <th className="py-2.5 px-3.5 text-right">LTP</th>
+                    <th className="py-2.5 px-3.5 text-right">Invested</th>
+                    <th className="py-2.5 px-3.5 text-right">Current Val</th>
+                    <th className="py-2.5 px-3.5 text-right">PnL (₹)</th>
+                    <th className="py-2.5 px-3.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#161d2d]">
-                  {positions.map((p) => {
-                    const isPosProfitable = (p.unrealized_pnl || 0) >= 0;
-                    return (
-                      <tr key={p.position_id} className="hover:bg-[#121724]">
-                        <td className="py-2.5 px-3 font-mono font-bold text-white">{p.symbol}</td>
-                        <td className="py-2.5 px-3">
-                          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-mono">
-                            {p.product}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 font-mono">{p.quantity}</td>
-                        <td className="py-2.5 px-3 font-mono">₹{p.entry_price?.toLocaleString('en-IN')}</td>
-                        <td className="py-2.5 px-3 font-mono text-gray-200">₹{p.ltp?.toLocaleString('en-IN')}</td>
-                        <td className={`py-2.5 px-3 font-mono font-bold ${
-                          isPosProfitable ? 'text-emerald-400' : 'text-red-400'
-                        }`}>
-                          {isPosProfitable ? '+' : ''}₹{p.unrealized_pnl?.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          <button
-                            onClick={() => onExitPosition(p.symbol)}
-                            className="px-2.5 py-1 rounded bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-semibold"
-                          >
-                            Square-Off
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {holdings && holdings.length > 0 ? (
+                    holdings.map((h) => {
+                      const isHoldingProfitable = (Number(h.unrealized_pnl) || 0) >= 0;
+                      return (
+                        <tr key={h.symbol} className="hover:bg-[#131a29] transition-colors">
+                          <td className="py-2.5 px-3.5 text-left">
+                            <span className="font-mono font-bold text-white block">{h.symbol}</span>
+                            {h.company_name && (
+                              <span className="text-[10px] text-gray-400 block truncate max-w-[130px]">
+                                {h.company_name}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-gray-300">{h.quantity}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-gray-300">{formatINR(h.avg_buy_price)}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono font-medium text-white">{formatINR(h.ltp)}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-gray-400">{formatINR(h.invested_value)}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-white">{formatINR(h.current_value)}</td>
+                          <td className={`py-2.5 px-3.5 text-right font-mono font-bold ${
+                            isHoldingProfitable ? 'text-emerald-400' : 'text-red-400'
+                          }`}>
+                            <span className="block whitespace-nowrap">
+                              {isHoldingProfitable ? '+' : ''}{formatINR(h.unrealized_pnl)}
+                            </span>
+                            <span className="text-[10px] font-normal block">
+                              ({isHoldingProfitable ? '+' : ''}{h.pnl_pct}%)
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right">
+                            <button
+                              onClick={() => setConfirmExitTarget({
+                                symbol: h.symbol,
+                                quantity: h.quantity,
+                                ltp: h.ltp,
+                                invested_value: h.invested_value,
+                                current_value: h.current_value,
+                                pnl: h.unrealized_pnl
+                              })}
+                              className="px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all whitespace-nowrap"
+                            >
+                              Sell / Exit
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-gray-400 font-mono text-xs">
+                        No Demat holdings found in current portfolio.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Open Intraday Positions Table */}
+          {positions && positions.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                    Active Open Positions
+                  </h4>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#161d2d] text-gray-300 border border-[#20293d]">
+                    {positions.length}
+                  </span>
+                </div>
+                <span className="text-[11px] text-amber-400 font-medium">3:12 PM Auto-Square-off Active</span>
+              </div>
+
+              <div className="overflow-x-auto border border-[#1b2336] rounded-xl bg-[#0e1320]">
+                <table className="w-full text-xs">
+                  <thead className="bg-[#121826] border-b border-[#1b2336] text-gray-400 text-[11px] font-semibold">
+                    <tr>
+                      <th className="py-2.5 px-3.5 text-left">Symbol</th>
+                      <th className="py-2.5 px-3.5 text-left">Type</th>
+                      <th className="py-2.5 px-3.5 text-right">Qty</th>
+                      <th className="py-2.5 px-3.5 text-right">Entry</th>
+                      <th className="py-2.5 px-3.5 text-right">LTP</th>
+                      <th className="py-2.5 px-3.5 text-right">PnL (₹)</th>
+                      <th className="py-2.5 px-3.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#161d2d]">
+                    {positions.map((p) => {
+                      const isPosProfitable = (Number(p.unrealized_pnl) || 0) >= 0;
+                      return (
+                        <tr key={p.position_id || p.symbol} className="hover:bg-[#131a29] transition-colors">
+                          <td className="py-2.5 px-3.5 text-left font-mono font-bold text-white">{p.symbol}</td>
+                          <td className="py-2.5 px-3.5 text-left">
+                            <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-mono border border-blue-500/20">
+                              {p.product || 'MIS'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-gray-300">{p.quantity}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono text-gray-300">{formatINR(p.entry_price)}</td>
+                          <td className="py-2.5 px-3.5 text-right font-mono font-medium text-white">{formatINR(p.ltp)}</td>
+                          <td className={`py-2.5 px-3.5 text-right font-mono font-bold ${
+                            isPosProfitable ? 'text-emerald-400' : 'text-red-400'
+                          }`}>
+                            {isPosProfitable ? '+' : ''}{formatINR(p.unrealized_pnl)}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-right">
+                            <button
+                              onClick={() => setConfirmExitTarget({
+                                symbol: p.symbol,
+                                quantity: p.quantity,
+                                ltp: p.ltp,
+                                entry_price: p.entry_price,
+                                pnl: p.unrealized_pnl
+                              })}
+                              className="px-2.5 py-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/25 text-[11px] font-semibold transition-all whitespace-nowrap"
+                            >
+                              Square-Off
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal-Embedded Sleek Confirmation Dialog */}
+        {confirmExitTarget && (
+          <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-[#0f1422] border border-[#2a354c] rounded-2xl max-w-md w-full p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-base font-bold text-white">Confirm Position Exit</h4>
+                  <p className="text-xs text-gray-400 font-mono">Execute Market Order via Gateway</p>
+                </div>
+              </div>
+
+              <div className="bg-[#141b2d] border border-[#1e273d] rounded-xl p-3.5 space-y-2 mb-4 font-mono text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Ticker:</span>
+                  <span className="font-bold text-white">{confirmExitTarget.symbol}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Quantity:</span>
+                  <span className="text-gray-200">{confirmExitTarget.quantity} Shares</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Current Market LTP:</span>
+                  <span className="text-emerald-400 font-bold">{formatINR(confirmExitTarget.ltp)}</span>
+                </div>
+                <div className="flex justify-between border-t border-[#1e273d] pt-2">
+                  <span className="text-gray-400">Realized PnL:</span>
+                  <span className={`font-bold ${
+                    (Number(confirmExitTarget.pnl) || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                  }`}>
+                    {(Number(confirmExitTarget.pnl) || 0) >= 0 ? '+' : ''}{formatINR(confirmExitTarget.pnl)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 justify-end">
+                <button
+                  type="button"
+                  disabled={isExiting}
+                  onClick={() => setConfirmExitTarget(null)}
+                  className="px-4 py-2 rounded-lg bg-[#1a2235] hover:bg-[#232d44] text-gray-300 text-xs font-semibold border border-[#2b3752] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isExiting}
+                  onClick={() => handleExecuteExit(confirmExitTarget.symbol)}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-lg shadow-red-600/20 transition-all flex items-center gap-1.5"
+                >
+                  {isExiting ? 'Processing...' : 'Confirm Market Exit'}
+                </button>
+              </div>
             </div>
           </div>
         )}
