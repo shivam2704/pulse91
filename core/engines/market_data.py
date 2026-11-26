@@ -528,7 +528,8 @@ class MarketDataEngine:
         Fetches real historical OHLCV exchange candles with moving averages (20, 50, 200)
         for any Indian equity or index.
         """
-        real_candles = self._fetch_stock_candles(symbol, timeframe)
+        sym = symbol.upper()
+        real_candles = self._fetch_stock_candles(sym, timeframe)
         if real_candles:
             return real_candles
         current_p = self.get_live_price(sym)

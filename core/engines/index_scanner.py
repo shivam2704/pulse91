@@ -4,6 +4,7 @@ On-Demand Index Constituents Scanner & Monday 08:00 AM Top 15 Master Scanner
 """
 
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Any
 from .market_data import market_data_engine, NSE_INDICES
 from .confluence_engine import confluence_engine
@@ -27,10 +28,8 @@ class IndexScannerEngine:
         index_info = NSE_INDICES[clean_key]
         symbols = index_info["symbols"]
 
-        results = []
-        for sym in symbols:
-            eval_res = self.confluence.evaluate_stock(sym)
-            results.append(eval_res)
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(self.confluence.evaluate_stock, symbols))
 
         # Sort descending by Confluence Score
         results.sort(key=lambda x: x["confluence_score"], reverse=True)
@@ -81,12 +80,10 @@ class IndexScannerEngine:
             NSE_INDICES["NIFTY_MIDCAP_100"]["symbols"][:15]
         ))
 
-        all_candidates = []
-        for sym in universe_symbols:
-            eval_res = self.confluence.evaluate_stock(sym)
-            # Only consider candidates passing basic quality criteria
-            if eval_res["confluence_score"] >= 65.0:
-                all_candidates.append(eval_res)
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            candidates_eval = list(executor.map(self.confluence.evaluate_stock, universe_symbols))
+
+        all_candidates = [res for res in candidates_eval if res["confluence_score"] >= 65.0]
 
         # Sort descending by Confluence Score
         all_candidates.sort(key=lambda x: x["confluence_score"], reverse=True)
