@@ -14,7 +14,7 @@ import asyncio
 import datetime
 from typing import Dict, List, Any, Optional
 
-from .market_data import market_data_engine
+from .market_data import market_data_engine, is_nse_market_open
 from .broker_engine import broker_engine
 from .whatsapp_alerter import whatsapp_alerter
 from .confluence_engine import confluence_engine
@@ -23,32 +23,31 @@ from .index_scanner import IndexScannerEngine
 class AutoTraderEngine:
     def __init__(self):
         self.is_active: bool = False
-        self.max_capital_per_trade: float = 50000.0 # ₹50,000 INR allocation per stock
-        self.max_open_positions: int = 5
+        self.max_capital_per_trade: float = 3000.0 # Scaled for ₹10k portfolio
+        self.max_open_positions: int = 3
         self.notification_phone: Optional[str] = None
         self.index_scanner = IndexScannerEngine()
         
-        # Track positions managed by the quant daemon
-        # Key: symbol -> { entry_price, target_1, target_2, stop_loss, quantity, entry_time }
+        # Track positions managed by the quant daemon (aligned with ₹10k Demat portfolio)
         self.managed_positions: Dict[str, Dict[str, Any]] = {
-            "HAL": {
-                "symbol": "HAL",
+            "BEL": {
+                "symbol": "BEL",
                 "quantity": 10,
-                "entry_price": 4310.0,
-                "target_1": 4550.0,
-                "stop_loss": 4190.0,
-                "entry_time": "2026-11-24 10:30:00"
+                "entry_price": 295.0,
+                "target_1": 311.37,
+                "stop_loss": 286.80,
+                "entry_time": "2026-11-26 09:30:00"
             }
         }
         self.execution_logs: List[Dict[str, Any]] = [
             {
                 "id": "LOG_1",
-                "timestamp": "2026-11-24 10:30:00 IST",
-                "symbol": "HAL",
+                "timestamp": "2026-11-26 09:30:00 IST",
+                "symbol": "BEL",
                 "action": "BUY",
-                "reason": "VCP Breakout Pivot ₹4,310 crossed with 2.4x volume surge",
+                "reason": "VCP Breakout Pivot ₹295 crossed with 2.1x volume surge",
                 "quantity": 10,
-                "price": 4310.0,
+                "price": 295.0,
                 "status": "FILLED",
                 "whatsapp_notified": True
             }
@@ -155,7 +154,15 @@ class AutoTraderEngine:
         Executes one evaluation cycle:
         1. Checks exit triggers (Target 1 / Stop Loss) for all active holdings & positions
         2. Checks entry triggers (VCP Breakout Pivots) for Monday Top 15 setups
+        Strictly observes NSE market hours (09:15 - 15:30 IST).
         """
+        self._sync_with_holdings()
+
+        # 100% replica of actual trading: when exchange is closed, prices are frozen at official EOD settlement.
+        # Breakout order executions halt until the exchange opens at 09:15 AM IST.
+        if not is_nse_market_open():
+            return []
+
         events = []
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S IST")
 

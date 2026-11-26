@@ -221,6 +221,10 @@ class BrokerEngine:
         order_id = f"ORD_{int(time.time())}_{symbol}"
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        from .market_data import is_nse_market_open
+        is_market_live = is_nse_market_open()
+        order_status = "EXECUTED" if is_market_live else "AMO_EXECUTED"
+
         order_record = {
             "order_id": order_id,
             "symbol": symbol,
@@ -228,7 +232,8 @@ class BrokerEngine:
             "product": product,
             "quantity": quantity,
             "price": execution_price,
-            "status": "EXECUTED",
+            "status": order_status,
+            "order_session": "LIVE_MARKET" if is_market_live else "AMO_EOD",
             "timestamp": now_str,
             "mode": self.active_mode
         }
