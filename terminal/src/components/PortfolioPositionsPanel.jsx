@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Zap, Play, Pause, RefreshCw, ShieldAlert, Target, ShoppingBag, ArrowUpRight, TrendingUp, TrendingDown, CheckCircle2, AlertCircle, PhoneCall, ShieldCheck } from 'lucide-react';
+import { Zap, Play, Pause, RefreshCw, ShieldAlert, Target, ShoppingBag, ArrowUpRight, TrendingUp, TrendingDown, CheckCircle2, AlertCircle, PhoneCall, ShieldCheck, X, LogOut, Loader2 } from 'lucide-react';
 
 export default function PortfolioPositionsPanel({
   demat,
@@ -13,7 +13,8 @@ export default function PortfolioPositionsPanel({
   onSelectStock,
   isRefreshing
 }) {
-  const [exitingSymbol, setExitingSymbol] = useState(null);
+  const [exitTarget, setExitTarget] = useState(null);
+  const [isExiting, setIsExiting] = useState(false);
 
   const filterByQuery = (item) => {
     if (!searchQuery?.trim()) return true;
@@ -29,13 +30,14 @@ export default function PortfolioPositionsPanel({
   const logs = autotrader?.recent_logs || [];
   const isActive = autotrader?.is_active ?? false;
 
-  const handleExit = async (symbol) => {
-    if (!window.confirm(`Are you sure you want to SELL / Exit ${symbol} at current market price?`)) return;
-    setExitingSymbol(symbol);
+  const handleConfirmExit = async () => {
+    if (!exitTarget) return;
+    setIsExiting(true);
     try {
-      await onExitPosition(symbol);
+      await onExitPosition(exitTarget.symbol);
+      setExitTarget(null);
     } finally {
-      setExitingSymbol(null);
+      setIsExiting(false);
     }
   };
 
@@ -340,11 +342,20 @@ export default function PortfolioPositionsPanel({
                       </td>
                       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleExit(pos.symbol)}
-                          disabled={exitingSymbol === pos.symbol}
-                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                          onClick={() => setExitTarget({
+                            symbol: pos.symbol,
+                            companyName: pos.company_name || pos.symbol,
+                            quantity: pos.quantity,
+                            product: 'MIS',
+                            buyPrice: pos.entry_price,
+                            ltp: ltp,
+                            currentValue: pos.quantity * ltp,
+                            pnl: pnl,
+                            pnlPct: pnlPct
+                          })}
+                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all cursor-pointer"
                         >
-                          {exitingSymbol === pos.symbol ? 'Selling...' : 'Sell / Exit'}
+                          Sell / Exit
                         </button>
                       </td>
                     </tr>
@@ -391,11 +402,20 @@ export default function PortfolioPositionsPanel({
                       </td>
                       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
-                          onClick={() => handleExit(h.symbol)}
-                          disabled={exitingSymbol === h.symbol}
-                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                          onClick={() => setExitTarget({
+                            symbol: h.symbol,
+                            companyName: h.company_name || h.symbol,
+                            quantity: h.quantity,
+                            product: 'CNC',
+                            buyPrice: buyPrice,
+                            ltp: ltp,
+                            currentValue: h.current_value ?? (h.quantity * ltp),
+                            pnl: pnl,
+                            pnlPct: pnlPct
+                          })}
+                          className="px-3 py-1 rounded bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 text-xs font-semibold transition-all cursor-pointer"
                         >
-                          {exitingSymbol === h.symbol ? 'Selling...' : 'Sell / Exit'}
+                          Sell / Exit
                         </button>
                       </td>
                     </tr>
@@ -465,6 +485,110 @@ export default function PortfolioPositionsPanel({
           </div>
         )}
       </div>
+
+      {/* 4. Sleek Institutional Exit / Square-Off Confirmation Modal */}
+      {exitTarget && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#0c101a] border border-[#20293d] rounded-2xl w-full max-w-md shadow-2xl p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-[#1b2336]">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <LogOut className="w-4 h-4" />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-white tracking-tight">Confirm Position Square-Off</h3>
+                    <span className="text-[10px] font-mono bg-[#161f30] text-gray-300 border border-[#24314c] px-2 py-0.5 rounded">
+                      {exitTarget.symbol}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-mono mt-0.5">
+                    Instant Market Order Execution • {exitTarget.product} Demat
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setExitTarget(null)}
+                className="p-1.5 rounded-lg bg-[#161d2d] hover:bg-[#20293d] text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body: Financial Breakdown */}
+            <div className="mt-4 space-y-3.5 text-xs">
+              {/* Settlement Card */}
+              <div className="p-3.5 bg-[#121826] border border-[#1e273c] rounded-xl space-y-2.5">
+                <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase">Shares to Square-Off</span>
+                    <strong className="text-white font-bold text-sm">{exitTarget.quantity} Shares</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px] uppercase">Current Market LTP</span>
+                    <strong className="text-white font-bold text-sm">₹{exitTarget.ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                  <div className="pt-2 border-t border-[#1b2336]">
+                    <span className="text-gray-400 block text-[10px] uppercase">Original Buy Price</span>
+                    <span className="text-gray-300 font-bold">₹{exitTarget.buyPrice?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="pt-2 border-t border-[#1b2336]">
+                    <span className="text-gray-400 block text-[10px] uppercase">Total Proceeds</span>
+                    <strong className="text-emerald-400 font-bold">₹{exitTarget.currentValue?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Realized PnL Impact Card */}
+              <div className={`p-3 rounded-xl border font-mono ${
+                exitTarget.pnl >= 0
+                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+              }`}>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 text-[10px] uppercase font-sans font-semibold">Realized PnL Impact:</span>
+                  <strong className="text-sm font-bold font-mono">
+                    {exitTarget.pnl > 0 ? '+' : ''}₹{exitTarget.pnl?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({exitTarget.pnlPct > 0 ? '+' : ''}{exitTarget.pnlPct?.toFixed(2)}%)
+                  </strong>
+                </div>
+                <span className="text-[10px] text-gray-400 block mt-1 leading-relaxed">
+                  Funds will be instantly returned to Demat Available Cash and Auto-Trader surveillance will be deregistered.
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setExitTarget(null)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#161d2d] hover:bg-[#20293d] text-gray-300 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isExiting}
+                  onClick={handleConfirmExit}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-lg cursor-pointer disabled:opacity-50"
+                >
+                  {isExiting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Executing Sell...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Confirm Market Exit</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
