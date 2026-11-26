@@ -13,10 +13,12 @@ import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, 
 
 export default function App() {
   const [market, setMarket] = useState({
-    nifty_50: 24280.50,
-    nifty_change_pct: 0.42,
+    nifty_50: 25884.50,
+    nifty_change_pct: 2.11,
     regime: 'BULLISH_TRENDING',
-    fii_dii_cr: 1850
+    fii_dii_cr: 1850.40,
+    is_market_open: false,
+    session_status: 'MARKET CLOSED (EOD SETTLEMENT)'
   });
 
   const [demat, setDemat] = useState({
@@ -75,6 +77,7 @@ export default function App() {
 
   // Fetch initial data
   useEffect(() => {
+    fetchMarketRegime();
     fetchDemat();
     fetchMondayScan();
     fetchAutotraderStatus();
@@ -106,6 +109,27 @@ export default function App() {
       if (ws) ws.close();
     };
   }, []);
+
+  const fetchMarketRegime = async () => {
+    try {
+      const res = await fetch('/api/v1/scan/regime');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.market) {
+          setMarket({
+            nifty_50: json.market.nifty_ltp,
+            nifty_change_pct: json.market.nifty_change_pct,
+            regime: json.market.regime_status,
+            fii_dii_cr: json.market.fii_dii_net_flow_cr,
+            is_market_open: json.market.is_market_open,
+            session_status: json.market.session_status
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Market regime fetch:', e.message);
+    }
+  };
 
   const fetchDemat = async () => {
     try {

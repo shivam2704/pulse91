@@ -19,6 +19,17 @@ def get_available_indices():
         "indices": index_scanner_engine.get_available_indices()
     }
 
+@router.get("/regime")
+def get_live_market_regime():
+    """
+    Returns real-time NSE Market Regime, live NIFTY 50 index price,
+    percentage change, market open status, and trend condition.
+    """
+    return {
+        "success": True,
+        "market": market_data_engine.get_market_regime()
+    }
+
 @router.get("/search")
 def search_indices_and_stocks(q: str = Query(..., min_length=1, description="Search query for stocks or indices")):
     """

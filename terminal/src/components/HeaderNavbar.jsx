@@ -49,10 +49,10 @@ export default function HeaderNavbar({
           <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
             <span className="text-gray-400 font-semibold text-[11px]">NIFTY 50</span>
             <span className="font-mono font-bold text-white">
-              {market.nifty_50 ? market.nifty_50.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '24,280.50'}
+              {market.nifty_50 ? market.nifty_50.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '25,884.50'}
             </span>
             <span className={`font-mono font-medium ${isMarketBullish ? 'text-emerald-400' : 'text-red-400'}`}>
-              {isMarketBullish ? '+' : ''}{market.nifty_change_pct || '+0.42'}%
+              {isMarketBullish ? '+' : ''}{market.nifty_change_pct !== undefined && market.nifty_change_pct !== null ? market.nifty_change_pct : '+2.11'}%
             </span>
           </div>
 
