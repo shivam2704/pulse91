@@ -166,8 +166,17 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
       };
       window.addEventListener('resize', handleResize);
 
+      let resizeObserver = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          handleResize();
+        });
+        resizeObserver.observe(container);
+      }
+
       return () => {
         window.removeEventListener('resize', handleResize);
+        if (resizeObserver) resizeObserver.disconnect();
         if (chartRef.current) {
           try {
             chartRef.current.remove();

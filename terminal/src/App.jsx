@@ -8,6 +8,7 @@ import OrderExecutionModal from './components/OrderExecutionModal';
 import WhatsAppPreviewModal from './components/WhatsAppPreviewModal';
 import WhatsAppConfigModal from './components/WhatsAppConfigModal';
 import ConnectBrokerModal from './components/ConnectBrokerModal';
+import NiftyIndexChartModal from './components/NiftyIndexChartModal';
 import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
 import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart, CheckCircle2 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ export default function App() {
   // Modals
   const [isDematModalOpen, setIsDematModalOpen] = useState(false);
   const [isConnectBrokerOpen, setIsConnectBrokerOpen] = useState(false);
+  const [isNiftyChartOpen, setIsNiftyChartOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [orderModalStock, setOrderModalStock] = useState(null);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
@@ -397,6 +399,7 @@ export default function App() {
         onOpenWhatsAppModal={() => setIsWhatsAppConfigOpen(true)}
         onOpenDemat={() => setIsDematModalOpen(true)}
         onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
+        onOpenNiftyChart={() => setIsNiftyChartOpen(true)}
       />
 
       {/* Floating Order Execution Toast */}
@@ -831,6 +834,12 @@ export default function App() {
         onClose={() => setIsWhatsAppConfigOpen(false)}
         currentPhone={whatsAppPhone}
         onUpdatePhone={(phone) => setWhatsAppPhone(phone)}
+      />
+
+      <NiftyIndexChartModal
+        isOpen={isNiftyChartOpen}
+        onClose={() => setIsNiftyChartOpen(false)}
+        market={market}
       />
 
       {/* Footer */}

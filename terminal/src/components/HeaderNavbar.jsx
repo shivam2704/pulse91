@@ -7,7 +7,8 @@ export default function HeaderNavbar({
   whatsAppPhone,
   onOpenWhatsAppModal,
   onOpenDemat,
-  onOpenConnectBroker
+  onOpenConnectBroker,
+  onOpenNiftyChart
 }) {
   const isMarketBullish = (market?.nifty_change_pct ?? 0) >= 0;
   const isSandbox = demat?.mode === 'SANDBOX';
@@ -54,11 +55,19 @@ export default function HeaderNavbar({
 
         {/* Live Index Tickers */}
         <div className="hidden lg:flex items-center gap-3 text-xs whitespace-nowrap shrink-0">
-          <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
-            <span className="text-gray-400 font-semibold text-[11px]">NIFTY 50</span>
+          <button
+            type="button"
+            onClick={onOpenNiftyChart}
+            title="Click to view NIFTY 50 Benchmark Interactive Candlestick Chart"
+            className="flex items-center gap-2 bg-[#121824] hover:bg-[#151f33] px-3 py-1.5 rounded-lg border border-[#1e2638] hover:border-emerald-500/50 transition-all cursor-pointer group text-left shadow-sm"
+          >
+            <div className="flex items-center gap-1.5">
+              <BarChart2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-400 transition-colors" />
+              <span className="text-gray-400 group-hover:text-gray-200 font-semibold text-[11px] transition-colors">NIFTY 50</span>
+            </div>
             {market?.nifty_50 ? (
               <>
-                <span className="font-mono font-bold text-white">
+                <span className="font-mono font-bold text-white group-hover:text-emerald-300 transition-colors">
                   {Number(market.nifty_50).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </span>
                 <span className={`font-mono font-medium ${isMarketBullish ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -68,7 +77,7 @@ export default function HeaderNavbar({
             ) : (
               <div className="w-24 h-4 bg-[#1b2336] rounded animate-pulse"></div>
             )}
-          </div>
+          </button>
 
           <div className="hidden xl:flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-lg border border-[#1e2638]">
             <span className="text-gray-400 font-semibold text-[11px]">FII/DII FLOW</span>
