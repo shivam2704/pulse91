@@ -12,28 +12,8 @@ import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
 import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  const [market, setMarket] = useState({
-    nifty_50: 25884.50,
-    nifty_change_pct: 2.11,
-    regime: 'BULLISH_TRENDING',
-    fii_dii_cr: 1850.40,
-    is_market_open: false,
-    session_status: 'MARKET CLOSED (EOD SETTLEMENT)'
-  });
-
-  const [demat, setDemat] = useState({
-    mode: 'SANDBOX',
-    broker: 'Pulse91 Sandbox Broker',
-    account_id: 'PULSE91-DEMAT-SBX-01',
-    account_net_worth: 10000.00,
-    available_cash: 7050.00,
-    invested_value: 2950.00,
-    total_unrealized_pnl: 20.00,
-    total_unrealized_pnl_pct: 0.68,
-    today_pnl: 15.00,
-    holdings: [],
-    positions: []
-  });
+  const [market, setMarket] = useState(null);
+  const [demat, setDemat] = useState(null);
 
   const [mondayData, setMondayData] = useState(null);
   const [selectedStock, setSelectedStock] = useState(null);
@@ -275,7 +255,7 @@ export default function App() {
   };
 
   const handleToggleMode = async (selectedBroker = 'Groww') => {
-    const nextMode = demat.mode === 'SANDBOX' ? 'LIVE_DEMAT' : 'SANDBOX';
+    const nextMode = demat?.mode === 'SANDBOX' ? 'LIVE_DEMAT' : 'SANDBOX';
     try {
       const res = await fetch('/api/v1/demat/mode', {
         method: 'POST',
@@ -326,7 +306,7 @@ export default function App() {
         return {
           success: true,
           order_id: data.order?.order_id,
-          broker: demat.broker || 'SANDBOX DEMAT',
+          broker: demat?.broker || 'SANDBOX DEMAT',
           price: price
         };
       } else {
@@ -826,8 +806,8 @@ export default function App() {
       <ConnectBrokerModal
         isOpen={isConnectBrokerOpen}
         onClose={() => setIsConnectBrokerOpen(false)}
-        activeBroker={demat.broker}
-        activeMode={demat.mode}
+        activeBroker={demat?.broker || 'Groww'}
+        activeMode={demat?.mode || 'SANDBOX'}
         onConnected={(broker) => {
           fetchDemat();
         }}
@@ -841,7 +821,7 @@ export default function App() {
         onClose={() => setIsOrderModalOpen(false)}
         stock={orderModalStock}
         onConfirmOrder={handleConfirmOrder}
-        availableCash={demat.available_cash}
+        availableCash={demat?.available_cash ?? 0}
         onViewDemat={() => setActiveMainTab('PORTFOLIO_POSITIONS')}
       />
 
