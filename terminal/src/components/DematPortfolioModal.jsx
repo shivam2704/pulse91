@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle } from 'lucide-react';
+import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle, RotateCcw } from 'lucide-react';
 
 const formatINR = (val, decimals = 2) => {
   if (val === undefined || val === null || isNaN(Number(val))) return '₹0.00';
@@ -14,10 +14,12 @@ export default function DematPortfolioModal({
   onClose,
   portfolio,
   onExitPosition,
-  onToggleMode
+  onToggleMode,
+  onResetSandbox
 }) {
   const [confirmExitTarget, setConfirmExitTarget] = useState(null);
   const [isExiting, setIsExiting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   if (!isOpen || !portfolio) return null;
 
@@ -98,6 +100,25 @@ export default function DematPortfolioModal({
             >
               Toggle Mode
             </button>
+
+            {isSandbox && onResetSandbox && (
+              <button
+                disabled={isResetting}
+                onClick={async () => {
+                  setIsResetting(true);
+                  try {
+                    await onResetSandbox();
+                  } finally {
+                    setIsResetting(false);
+                  }
+                }}
+                className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-1.5 whitespace-nowrap"
+                title="Reset virtual sandbox balance back to ₹10,000"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+                <span>Reset (₹10k)</span>
+              </button>
+            )}
 
             <button
               onClick={onClose}

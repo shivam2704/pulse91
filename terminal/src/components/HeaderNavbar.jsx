@@ -96,7 +96,7 @@ export default function HeaderNavbar({
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{isSandbox ? 'Sandbox (₹10L)' : `Live (${demat.broker || 'Groww'})`}</span>
+            <span>{isSandbox ? 'Sandbox (₹10k)' : `Live (${demat.broker || 'Groww'})`}</span>
           </button>
 
           {/* Demat Portfolio Pill */}
@@ -108,7 +108,7 @@ export default function HeaderNavbar({
             <div className="flex items-center gap-1.5 font-mono">
               <span className="text-[11px] text-gray-400">Demat:</span>
               <span className="font-bold text-white text-xs">
-                ₹{demat.net_worth ? Math.round(demat.net_worth).toLocaleString('en-IN') : '10,00,000'}
+                ₹{demat.net_worth ? Math.round(demat.net_worth).toLocaleString('en-IN') : '10,000'}
               </span>
               <span className={`text-[11px] font-medium ${
                 (demat.unrealized_pnl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'

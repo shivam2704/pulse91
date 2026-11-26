@@ -129,6 +129,18 @@ def disconnect_user_broker():
         "mode": "SANDBOX"
     }
 
+@router.post("/reset")
+def reset_sandbox_demat(amount: float = 10000.0):
+    """
+    Resets the Sandbox Demat to ₹10,000 INR virtual capital.
+    """
+    overview = broker_engine.reset_sandbox(initial_capital=amount)
+    return {
+        "success": True,
+        "message": f"Sandbox Demat reset to ₹{amount:,.2f} virtual capital.",
+        "portfolio": overview
+    }
+
 @router.get("/overview")
 def get_demat_portfolio():
     """
@@ -143,7 +155,7 @@ def get_demat_portfolio():
 @router.post("/mode")
 def switch_demat_mode(payload: SwitchModeRequest):
     """
-    Toggles between Sandbox (₹10L Virtual Demat) and Live Demat broker connection.
+    Toggles between Sandbox (₹10k Virtual Demat) and Live Demat broker connection.
     """
     try:
         res = broker_engine.set_mode(payload.mode, payload.broker or "DhanHQ", payload.account_id or "CLIENT_01")

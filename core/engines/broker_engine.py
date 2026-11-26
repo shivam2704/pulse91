@@ -20,44 +20,51 @@ class BrokerEngine:
         self.broker_name = "Pulse91 Sandbox Broker"
         self.account_id = "PULSE91-DEMAT-SBX-01"
 
-        # Sandbox Virtual State
-        self.initial_balance = 1000000.00 # ₹10,00,000 INR
-        self.available_cash = 785400.00
+        # Sandbox Virtual State (₹10,000 Capital)
+        self.initial_balance = 10000.00 # ₹10,000 INR
+        self.available_cash = 7050.00
         
-        # Seed realistic initial Demat portfolio
+        # Seed realistic initial Demat portfolio scaled to ₹10k
         self.holdings: List[Dict[str, Any]] = [
             {
-                "symbol": "TCS",
-                "company_name": "Tata Consultancy Services",
-                "quantity": 25,
-                "avg_buy_price": 3980.00,
-                "invested_value": 99500.00,
+                "symbol": "BEL",
+                "company_name": "Bharat Electronics Ltd",
+                "quantity": 10,
+                "avg_buy_price": 295.00,
+                "invested_value": 2950.00,
                 "product": "CNC",
-                "date_bought": "2026-10-14"
-            },
-            {
-                "symbol": "RELIANCE",
-                "company_name": "Reliance Industries Ltd",
-                "quantity": 30,
-                "avg_buy_price": 2895.00,
-                "invested_value": 86850.00,
-                "product": "CNC",
-                "date_bought": "2026-10-22"
-            },
-            {
-                "symbol": "HAL",
-                "company_name": "Hindustan Aeronautics Ltd",
-                "quantity": 20,
-                "avg_buy_price": 4120.00,
-                "invested_value": 82400.00,
-                "product": "CNC",
-                "date_bought": "2026-11-04"
+                "date_bought": "2026-11-20"
             }
         ]
 
         self.positions: List[Dict[str, Any]] = []
         self.orders: List[Dict[str, Any]] = []
         self.gtt_triggers: List[Dict[str, Any]] = []
+
+    def reset_sandbox(self, initial_capital: float = 10000.00) -> Dict[str, Any]:
+        """
+        Resets virtual Demat sandbox back to default ₹10k capital.
+        """
+        self.active_mode = "SANDBOX"
+        self.broker_name = "Pulse91 Sandbox Broker"
+        self.account_id = "PULSE91-DEMAT-SBX-01"
+        self.initial_balance = float(initial_capital)
+        self.available_cash = 7050.00 if initial_capital >= 10000.0 else initial_capital
+        self.holdings = [
+            {
+                "symbol": "BEL",
+                "company_name": "Bharat Electronics Ltd",
+                "quantity": 10,
+                "avg_buy_price": 295.00,
+                "invested_value": 2950.00,
+                "product": "CNC",
+                "date_bought": datetime.datetime.now().strftime("%Y-%m-%d")
+            }
+        ] if initial_capital >= 10000.0 else []
+        self.positions = []
+        self.orders = []
+        self.gtt_triggers = []
+        return self.get_portfolio_overview()
 
     def set_mode(self, mode: str, broker: str = "Groww", account_id: str = "GROWW-USER-01"):
         if mode.upper() in ["SANDBOX", "LIVE_DEMAT"]:

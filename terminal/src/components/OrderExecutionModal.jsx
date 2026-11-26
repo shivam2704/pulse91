@@ -52,7 +52,7 @@ export default function OrderExecutionModal({
   const targetPct = ((effectiveTarget - ltp) / ltp) * 100;
   const maxProfitINR = Math.round(targetDiff * effectiveQty);
 
-  const hasSufficientFunds = (availableCash || 1000000) >= totalInvestment;
+  const hasSufficientFunds = (availableCash || 10000) >= totalInvestment;
 
   const handleSubmit = async (e) => {
     e.preventDefault();

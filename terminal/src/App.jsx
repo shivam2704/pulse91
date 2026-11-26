@@ -23,12 +23,12 @@ export default function App() {
     mode: 'SANDBOX',
     broker: 'Pulse91 Sandbox Broker',
     account_id: 'PULSE91-DEMAT-SBX-01',
-    account_net_worth: 1000000.00,
-    available_cash: 785400.00,
-    invested_value: 268750.00,
-    total_unrealized_pnl: 14500.00,
-    total_unrealized_pnl_pct: 5.4,
-    today_pnl: 2280.00,
+    account_net_worth: 10000.00,
+    available_cash: 7050.00,
+    invested_value: 2950.00,
+    total_unrealized_pnl: 20.00,
+    total_unrealized_pnl_pct: 0.68,
+    today_pnl: 15.00,
     holdings: [],
     positions: []
   });
@@ -262,6 +262,15 @@ export default function App() {
           account_id: `${selectedBroker.toUpperCase()}-CLIENT-91`
         })
       });
+      if (res.ok) {
+        fetchDemat();
+      }
+    } catch (e) {}
+  };
+
+  const handleResetSandbox = async () => {
+    try {
+      const res = await fetch('/api/v1/demat/reset', { method: 'POST' });
       if (res.ok) {
         fetchDemat();
       }
@@ -787,6 +796,7 @@ export default function App() {
         portfolio={demat}
         onExitPosition={handleExitPosition}
         onToggleMode={handleToggleMode}
+        onResetSandbox={handleResetSandbox}
       />
 
       <ConnectBrokerModal
