@@ -382,7 +382,7 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
 
           {/* Timeframe Selector */}
           <div className="flex items-center bg-[#131a29] border border-[#20293d] rounded-lg p-0.5">
-            {['15m', '1H', 'D', 'W'].map((tf) => (
+            {['1m', '3m', '5m', '15m', '1H', 'D', 'W'].map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
@@ -397,24 +397,26 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
             ))}
           </div>
 
-          {/* Toggle Overlays */}
-          <button
-            onClick={() => setShowOverlays(!showOverlays)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border transition-all ${
-              showOverlays
-                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
-                : 'bg-[#141a29] border-[#222b40] text-gray-500'
-            }`}
-            title="Toggle Quant Breakout Pivot and Target lines"
-          >
-            {showOverlays ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-            <span>{showOverlays ? 'Pivot & SL On' : 'Clean Price Only'}</span>
-          </button>
+          {/* Toggle Overlays — only shown when stock has Pivot / Target / SL overlays */}
+          {(tradePlan?.target_1 || tradePlan?.target_2 || tradePlan?.stop_loss_price || vcpData?.pivot_buy_point) && (
+            <button
+              onClick={() => setShowOverlays(!showOverlays)}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                showOverlays
+                  ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                  : 'bg-[#141a29] border-[#222b40] text-gray-500'
+              }`}
+              title="Toggle Quant Breakout Pivot and Target lines"
+            >
+              {showOverlays ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              <span>{showOverlays ? 'Pivot & SL On' : 'Clean Price Only'}</span>
+            </button>
+          )}
 
           {/* Reset Zoom Button */}
           <button
             onClick={handleResetZoom}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#141a29] hover:bg-[#1e273d] border border-[#222b40] text-gray-400 hover:text-white transition-all"
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#141a29] hover:bg-[#1e273d] border border-[#222b40] text-gray-400 hover:text-white transition-all whitespace-nowrap shrink-0 cursor-pointer"
             title="Reset chart zoom to fit all candles"
           >
             <RotateCcw className="w-3 h-3 text-gray-400" />
@@ -424,10 +426,10 @@ export default function StockCandleChart({ symbol, ltp, tradePlan, vcpData }) {
 
         {/* OHLC Readout */}
         <div className="flex items-center gap-3 font-mono text-xs text-gray-400">
-          <div>O: <span className="text-white">₹{displayO?.toLocaleString('en-IN') ?? '—'}</span></div>
-          <div>H: <span className="text-emerald-400">₹{displayH?.toLocaleString('en-IN') ?? '—'}</span></div>
-          <div>L: <span className="text-red-400">₹{displayL?.toLocaleString('en-IN') ?? '—'}</span></div>
-          <div>C: <span className="text-white font-bold">₹{displayC?.toLocaleString('en-IN') ?? '—'}</span></div>
+          <div>O: <span className="text-white">{displayO != null ? `₹${Number(displayO).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div>
+          <div>H: <span className="text-emerald-400">{displayH != null ? `₹${Number(displayH).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div>
+          <div>L: <span className="text-red-400">{displayL != null ? `₹${Number(displayL).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div>
+          <div>C: <span className="text-white font-bold">{displayC != null ? `₹${Number(displayC).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</span></div>
           {displayV && (
             <div className="hidden md:block">
               Vol: <span className="text-gray-300">{(displayV / 100000).toFixed(1)}L</span>

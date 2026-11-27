@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import HeaderNavbar from './components/HeaderNavbar';
 import IndexScannerBar from './components/IndexScannerBar';
 import MondayTop15Panel from './components/MondayTop15Panel';
+import ScannerTable from './components/ScannerTable';
 import StockConfluenceCard from './components/StockConfluenceCard';
 import DematPortfolioModal from './components/DematPortfolioModal';
 import OrderExecutionModal from './components/OrderExecutionModal';
@@ -12,6 +13,8 @@ import NiftyIndexChartModal from './components/NiftyIndexChartModal';
 import PortfolioPositionsPanel from './components/PortfolioPositionsPanel';
 import AuthModal from './components/AuthModal';
 import { getCurrentUser, onAuthStateChange } from './services/supabaseAuth';
+import { api } from './services/api';
+import { formatINR, formatBuyZone, formatHorizon } from './utils/formatters';
 import { Layers, ArrowUpRight, TrendingUp, Calendar, Zap, RefreshCw, BarChart2, Columns, Rows, Eye, Briefcase, ShoppingCart, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
@@ -45,8 +48,24 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Sync Auth session on mount
+  // Sync Auth session on mount & handle OAuth popup callback if inside popup
   useEffect(() => {
+    const isOAuthPopup = window.opener && window.location.search.includes('oauth_popup=1');
+    if (isOAuthPopup) {
+      getCurrentUser()
+        .then(() => {
+          setTimeout(() => {
+            window.opener.postMessage({ type: 'PULSE91_OAUTH_COMPLETE' }, window.location.origin);
+            window.close();
+          }, 300);
+        })
+        .catch(() => {
+          window.opener.postMessage({ type: 'PULSE91_OAUTH_COMPLETE' }, window.location.origin);
+          window.close();
+        });
+      return;
+    }
+
     getCurrentUser().then(setCurrentUser).catch(() => {});
     const authSub = onAuthStateChange((_event, session) => {
       setCurrentUser(session?.user || null);
@@ -79,7 +98,7 @@ export default function App() {
     fetchAutotraderStatus();
     handleScanIndex('NIFTY_AUTO');
 
-    // Connect WebSocket
+    // Connect WebSocket (Pure Market Ticker & Regime Broadcast)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
     let ws = null;
@@ -90,12 +109,6 @@ export default function App() {
           const msg = JSON.parse(event.data);
           if (msg.type === 'TICK_UPDATE') {
             if (msg.market) setMarket(msg.market);
-            if (msg.demat) {
-              setDemat((prev) => ({
-                ...prev,
-                ...msg.demat
-              }));
-            }
           }
         } catch (e) {}
       };
@@ -136,10 +149,9 @@ export default function App() {
 
   const fetchDemat = async () => {
     try {
-      const res = await fetch('/api/v1/demat/overview');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.portfolio) setDemat(json.portfolio);
+      const json = await api.demat.getOverview();
+      if (json && json.portfolio) {
+        setDemat(json.portfolio);
       }
     } catch (e) {
       console.warn('Demat fetch:', e.message);
@@ -288,22 +300,18 @@ export default function App() {
 
   const handleResetSandbox = async () => {
     try {
-      const res = await fetch('/api/v1/demat/reset', { method: 'POST' });
-      if (res.ok) {
+      const res = await api.demat.resetSandbox();
+      if (res && res.success) {
         fetchDemat();
+        fetchAutotraderStatus();
       }
     } catch (e) {}
   };
 
   const handleConfirmOrder = async (orderPayload) => {
     try {
-      const res = await fetch('/api/v1/trade/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload)
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await api.trade.placeOrder(orderPayload);
+      if (data.success) {
         fetchDemat();
         fetchAutotraderStatus();
         const price = data.order?.price || orderPayload.price;
@@ -333,13 +341,8 @@ export default function App() {
 
   const handleExitPosition = async (symbol) => {
     try {
-      const res = await fetch('/api/v1/trade/exit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol })
-      });
-      const data = await res.json();
-      if (res.ok) {
+      const data = await api.trade.exitPosition(symbol);
+      if (data.success) {
         fetchDemat();
         fetchAutotraderStatus();
         setOrderToast({
@@ -348,15 +351,28 @@ export default function App() {
           message: `Position Squared Off: Sold ${symbol} at Market Price`
         });
         setTimeout(() => setOrderToast(null), 6000);
+      } else {
+        setOrderToast({
+          type: 'EXIT',
+          symbol,
+          message: `Square-off Failed: ${data.detail || 'Could not exit position'}`
+        });
+        setTimeout(() => setOrderToast(null), 6000);
       }
-    } catch (e) {}
+    } catch (e) {
+      setOrderToast({
+        type: 'EXIT',
+        symbol,
+        message: `Square-off Error: ${e.message}`
+      });
+      setTimeout(() => setOrderToast(null), 6000);
+    }
   };
 
   const fetchAutotraderStatus = async () => {
     try {
-      const res = await fetch('/api/v1/trade/autotrader/status');
-      if (res.ok) {
-        const json = await res.json();
+      const json = await api.trade.getAutotraderStatus();
+      if (json) {
         setAutotrader(json);
       }
     } catch (e) {}
@@ -364,9 +380,9 @@ export default function App() {
 
   const handleToggleAutotrader = async () => {
     try {
-      const res = await fetch('/api/v1/trade/autotrader/toggle', { method: 'POST' });
-      if (res.ok) {
-        const json = await res.json();
+      const isCurrentlyActive = autotrader?.is_active ?? false;
+      const json = await api.trade.toggleAutotrader(!isCurrentlyActive);
+      if (json && json.status) {
         setAutotrader(json.status);
         const isNowActive = json.status?.is_active ?? json.is_active;
         setOrderToast({
@@ -382,9 +398,8 @@ export default function App() {
 
   const handleRunAutotraderCycle = async () => {
     try {
-      const res = await fetch('/api/v1/trade/autotrader/cycle', { method: 'POST' });
-      if (res.ok) {
-        const json = await res.json();
+      const json = await api.trade.runAutotraderCycle();
+      if (json && json.status) {
         setAutotrader(json.status);
         fetchDemat();
         const events = json.events || [];
@@ -419,7 +434,13 @@ export default function App() {
         whatsAppPhone={whatsAppPhone}
         onOpenWhatsAppModal={() => setIsWhatsAppConfigOpen(true)}
         onOpenDemat={() => setIsDematModalOpen(true)}
-        onOpenConnectBroker={() => setIsConnectBrokerOpen(true)}
+        onOpenConnectBroker={() => {
+          if (!currentUser) {
+            setIsAuthModalOpen(true);
+          } else {
+            setIsConnectBrokerOpen(true);
+          }
+        }}
         onOpenNiftyChart={() => setIsNiftyChartOpen(true)}
         currentUser={currentUser}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
@@ -576,17 +597,17 @@ export default function App() {
 
         {/* 2. On-Demand Scanned Index Constituents Table (Full Width) */}
         {activeMainTab === 'INDEX_SCAN' && (
-          <div className="bg-[#0c101a] border border-[#1b2336] rounded-xl p-5 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#1b2336] gap-3 mb-4">
+          <div className="bg-[#0c101a] border border-[#1b2336] rounded-xl p-5 mb-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-[#1b2336]">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="p-1 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <Layers className="w-4 h-4" />
                   </span>
-                  <h3 className="text-base font-bold text-white tracking-tight">
+                  <h2 className="text-base font-bold text-white tracking-tight">
                     {indexScanResult?.index_name || selectedIndex} — On-Demand Live Scan
-                  </h3>
-                  <span className="text-[11px] font-mono bg-[#161f30] text-gray-300 border border-[#232f48] px-2 py-0.5 rounded-full">
+                  </h2>
+                  <span className="text-[11px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
                     {indexScanResult?.total_constituents || 0} Constituents
                   </span>
                 </div>
@@ -595,29 +616,32 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Summary Stats Badges */}
-              {indexScanResult?.summary && (
-                <div className="flex items-center gap-2 text-xs">
-                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Strong Buy</span>
-                    <span className="font-mono font-bold text-emerald-400 text-sm">
-                      {indexScanResult.summary.strong_buy_count}
+              {/* Compact Summary Pill & Re-run Scan (Matches Monday Watchlist) */}
+              <div className="flex items-center gap-3">
+                {indexScanResult?.summary && (
+                  <div className="hidden sm:flex items-center gap-2 text-xs text-gray-400 bg-[#121724] px-3 py-1.5 rounded-lg border border-[#1d2638]">
+                    <span className="font-semibold text-gray-300">Summary:</span>
+                    <span className="text-emerald-400 font-medium font-mono">
+                      Strong Buy {indexScanResult.summary.strong_buy_count}
+                    </span>
+                    <span className="text-gray-600">•</span>
+                    <span className="text-cyan-400 font-medium font-mono">
+                      Momentum {indexScanResult.summary.momentum_buy_count}
+                    </span>
+                    <span className="text-gray-600">•</span>
+                    <span className="text-white font-medium font-mono">
+                      Avg {indexScanResult.summary.average_confluence_score}
                     </span>
                   </div>
-                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Momentum Buy</span>
-                    <span className="font-mono font-bold text-cyan-400 text-sm">
-                      {indexScanResult.summary.momentum_buy_count}
-                    </span>
-                  </div>
-                  <div className="bg-[#121826] border border-[#1e2638] px-3 py-1.5 rounded-lg">
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold">Avg Score</span>
-                    <span className="font-mono font-bold text-white text-sm">
-                      {indexScanResult.summary.average_confluence_score}
-                    </span>
-                  </div>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={() => handleScanIndex(selectedIndex, true)}
+                  disabled={isScanningIndex}
+                  className="text-xs bg-[#151c2b] hover:bg-[#1a2336] text-gray-300 border border-[#222b40] px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  {isScanningIndex ? 'Scanning...' : 'Re-run Scan'}
+                </button>
+              </div>
             </div>
 
             {isScanningIndex ? (
@@ -626,147 +650,17 @@ export default function App() {
                 <span className="text-xs font-mono">Running 5-Pillar Confluence Engine on {selectedIndex}...</span>
               </div>
             ) : (
-              <div className="overflow-x-auto no-scrollbar">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-[#1b2336] text-gray-400 font-semibold uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-2"># Rank</th>
-                      <th className="py-3 px-3">Stock & Sector</th>
-                      <th className="py-3 px-3">LTP (₹)</th>
-                      <th className="py-3 px-3">Confluence Score</th>
-                      <th className="py-3 px-3">Verdict</th>
-                      <th className="py-3 px-3">Holding Horizon</th>
-                      <th className="py-3 px-3">Buy Zone</th>
-                      <th className="py-3 px-3">Target 1</th>
-                      <th className="py-3 px-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#161d2d]">
-                    {filteredIndexRankings.length === 0 ? (
-                      <tr>
-                        <td colSpan="9" className="py-8 text-center text-gray-400">
-                          No stocks matching "{searchQuery}" found in {indexScanResult?.index_name || selectedIndex}.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredIndexRankings.map((stock, idx) => {
-                      const score = stock.confluence_score;
-                      const isStrong = stock.verdict === 'STRONG BUY';
-                      const rank = idx + 1;
-                      const isSelected = selectedStock?.symbol === stock.symbol;
-
-                      return (
-                        <tr
-                          key={stock.symbol}
-                          className={`hover:bg-[#131926] transition-colors group cursor-pointer ${
-                            isSelected ? 'bg-emerald-500/15 border-l-2 border-emerald-400' : ''
-                          }`}
-                          onClick={() => fetchStockEvaluation(stock.symbol, true)}
-                        >
-                          {/* Rank */}
-                          <td className="py-3.5 px-2 font-mono">
-                            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-bold text-xs ${
-                              rank <= 3
-                                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                                : 'bg-[#151c2b] text-gray-400 border border-[#20293d]'
-                            }`}>
-                              {rank}
-                            </span>
-                          </td>
-
-                          {/* Stock & Sector */}
-                          <td className="py-3.5 px-3">
-                            <div className="font-bold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1.5 font-mono">
-                              {stock.symbol}
-                              <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-400" />
-                            </div>
-                            <div className="text-[11px] text-gray-400 truncate max-w-[170px]">
-                              {stock.company_name}
-                            </div>
-                            <div className="text-[10px] text-gray-500 font-medium">
-                              {stock.sector}
-                            </div>
-                          </td>
-
-                          {/* LTP */}
-                          <td className="py-3.5 px-3 font-mono font-bold text-gray-200">
-                            ₹{stock.ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-
-                          {/* Confluence Score */}
-                          <td className="py-3.5 px-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-sm text-white">
-                                {score}
-                              </span>
-                              <span className="text-[10px] text-gray-500">/100</span>
-                            </div>
-                            <div className="w-24 bg-[#1b2336] h-1.5 rounded-full overflow-hidden mt-1">
-                              <div
-                                className={`h-full rounded-full ${
-                                  score >= 80 ? 'bg-emerald-500' : 'bg-blue-500'
-                                }`}
-                                style={{ width: `${score}%` }}
-                              ></div>
-                            </div>
-                            <div className="text-[10px] text-gray-400 mt-0.5">
-                              {stock.conviction_rate || '84.5% Win-Rate'}
-                            </div>
-                          </td>
-
-                          {/* Verdict */}
-                          <td className="py-3.5 px-3">
-                            <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                              isStrong ? 'badge-strong-buy' : 'badge-momentum-buy'
-                            }`}>
-                              {stock.verdict}
-                            </span>
-                          </td>
-
-                          {/* Holding Horizon */}
-                          <td className="py-3.5 px-3 text-gray-300 font-medium">
-                            {stock.horizon_name}
-                          </td>
-
-                          {/* Buy Zone */}
-                          <td className="py-3.5 px-3 font-mono text-gray-300">
-                            {stock.trade_plan?.entry_range || (stock.ltp ? `₹${(stock.ltp * 0.995).toFixed(1)} - ₹${(stock.ltp * 1.005).toFixed(1)}` : '—')}
-                          </td>
-
-                          {/* Target 1 */}
-                          <td className="py-3.5 px-3 font-mono">
-                            <div className="text-emerald-400 font-semibold">
-                              ₹{(stock.trade_plan?.target_1_price || stock.trade_plan?.target_1 || stock.ltp || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </div>
-                            {stock.ltp > 0 && (stock.trade_plan?.target_1_price || stock.trade_plan?.target_1) ? (
-                              <span className="text-[10px] text-gray-500 font-normal">
-                                (+{(((stock.trade_plan?.target_1_price || stock.trade_plan?.target_1) - stock.ltp) / stock.ltp * 100).toFixed(1)}%)
-                              </span>
-                            ) : null}
-                          </td>
-
-                          {/* Actions */}
-                          <td className="py-3.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-end">
-                              <button
-                                onClick={() => {
-                                  setOrderModalStock(stock);
-                                  setIsOrderModalOpen(true);
-                                }}
-                                title="1-Click Demat Buy"
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors shadow-sm"
-                              >
-                                <ShoppingCart className="w-3.5 h-3.5" />
-                                <span>Buy</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    }))}
-                  </tbody>
-                </table>
-              </div>
+              <ScannerTable
+                stocks={filteredIndexRankings}
+                selectedSymbol={selectedStock?.symbol}
+                onSelectStock={(sym) => fetchStockEvaluation(sym, true)}
+                onBuyStock={(stock) => {
+                  setOrderModalStock(stock);
+                  setIsOrderModalOpen(true);
+                }}
+                emptyMessage={`No stocks matching "${searchQuery}" found in ${indexScanResult?.index_name || selectedIndex}.`}
+                useWeeklyRank={false}
+              />
             )}
           </div>
         )}
@@ -793,6 +687,7 @@ export default function App() {
           <div className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl">
             <StockConfluenceCard
               stockData={selectedStock}
+              dematMode={demat?.mode}
               onExecuteOrder={(stock) => {
                 setOrderModalStock(stock);
                 setIsOrderModalOpen(true);
@@ -820,7 +715,11 @@ export default function App() {
         onResetSandbox={handleResetSandbox}
         onOpenConnectBroker={() => {
           setIsDematModalOpen(false);
-          setIsConnectBrokerOpen(true);
+          if (!currentUser) {
+            setIsAuthModalOpen(true);
+          } else {
+            setIsConnectBrokerOpen(true);
+          }
         }}
         onDisconnectBroker={handleDisconnectBroker}
       />
@@ -830,6 +729,11 @@ export default function App() {
         onClose={() => setIsConnectBrokerOpen(false)}
         activeBroker={demat?.broker || 'Groww'}
         activeMode={demat?.mode || 'SANDBOX'}
+        currentUser={currentUser}
+        onOpenAuthModal={() => {
+          setIsConnectBrokerOpen(false);
+          setIsAuthModalOpen(true);
+        }}
         onConnected={(broker) => {
           fetchDemat();
         }}

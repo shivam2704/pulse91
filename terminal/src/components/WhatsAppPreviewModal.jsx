@@ -29,9 +29,9 @@ export default function WhatsAppPreviewModal({
 
 📈 *TRADE EXECUTION PLAN:*
 • *Buy Zone:* ${trade_plan?.entry_range}
-• *Stop-Loss:* ₹${trade_plan?.stop_loss_price?.toLocaleString('en-IN')} (-${trade_plan?.stop_loss_pct}%)
-• *Target 1:* ₹${trade_plan?.target_1_price?.toLocaleString('en-IN')} (+${trade_plan?.target_1_pct}%)
-• *Target 2:* ₹${trade_plan?.target_2_price?.toLocaleString('en-IN')} (+${trade_plan?.target_2_pct}%)
+• *Stop-Loss:* ₹${Number(trade_plan?.stop_loss_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (-${trade_plan?.stop_loss_pct}%)
+• *Target 1:* ₹${Number(trade_plan?.target_1_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (+${trade_plan?.target_1_pct}%)
+• *Target 2:* ₹${Number(trade_plan?.target_2_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (+${trade_plan?.target_2_pct}%)
 • *Risk/Reward:* ${trade_plan?.risk_reward_ratio}
 
 🔍 *5-PILLAR CONFLUENCE PROOFS:*

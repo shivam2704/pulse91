@@ -52,10 +52,11 @@ def execute_order(
                 quantity=payload.quantity,
                 entry_price=price,
                 target_1=t1,
-                stop_loss=sl
+                stop_loss=sl,
+                account_id=account_id
             )
         else:
-            autotrader_engine.unregister_position(sym)
+            autotrader_engine.unregister_position(sym, account_id=account_id)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -71,7 +72,7 @@ def square_off_position(
     """
     try:
         res = broker_engine.exit_position(payload.symbol, account_id=account_id)
-        autotrader_engine.unregister_position(payload.symbol)
+        autotrader_engine.unregister_position(payload.symbol, account_id=account_id)
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -84,14 +85,17 @@ def get_order_history(account_id: str = Depends(get_current_user_id)):
     return broker_engine.get_history(account_id=account_id)
 
 @router.get("/autotrader/status")
-def get_autotrader_status():
+def get_autotrader_status(account_id: str = Depends(get_current_user_id)):
     """
-    Returns live autonomous quant execution state, managed positions, and recent logs.
+    Returns live autonomous quant execution state, managed positions, and recent logs for this user.
     """
-    return autotrader_engine.get_status()
+    return autotrader_engine.get_status(account_id=account_id)
 
 @router.post("/autotrader/toggle")
-def toggle_autotrader(payload: Optional[AutoTraderConfigPayload] = None):
+def toggle_autotrader(
+    payload: Optional[AutoTraderConfigPayload] = None,
+    account_id: str = Depends(get_current_user_id)
+):
     """
     Toggles the autonomous execution daemon on/off.
     """
@@ -100,11 +104,11 @@ def toggle_autotrader(payload: Optional[AutoTraderConfigPayload] = None):
     return {
         "success": True,
         "is_active": new_state,
-        "status": autotrader_engine.get_status()
+        "status": autotrader_engine.get_status(account_id=account_id)
     }
 
 @router.post("/autotrader/cycle")
-async def trigger_autotrader_cycle():
+async def trigger_autotrader_cycle(account_id: str = Depends(get_current_user_id)):
     """
     Manually triggers one quant execution cycle (evaluates entries at pivot and exits at target/SL).
     """
@@ -113,5 +117,5 @@ async def trigger_autotrader_cycle():
         "success": True,
         "events_count": len(events),
         "events": events,
-        "status": autotrader_engine.get_status()
+        "status": autotrader_engine.get_status(account_id=account_id)
     }

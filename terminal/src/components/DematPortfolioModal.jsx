@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
 import { X, Wallet, ShieldCheck, ArrowUpRight, ArrowDownRight, Layers, AlertTriangle, RotateCcw, LogOut, ExternalLink } from 'lucide-react';
-
-const formatINR = (val, decimals = 2) => {
-  if (val === undefined || val === null || isNaN(Number(val))) return '₹0.00';
-  return '₹' + Number(val).toLocaleString('en-IN', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  });
-};
+import { formatINR } from '../utils/formatters';
 
 export default function DematPortfolioModal({
   isOpen,
@@ -80,7 +73,7 @@ export default function DematPortfolioModal({
                 </span>
               </div>
               <p className="text-xs text-gray-400 font-mono mt-0.5">
-                {isSandbox ? 'Account: PULSE91-DEMAT-SBX-01 (Virtual Paper Wallet)' : `Account ID: ${account_id}`}
+                {isSandbox ? `Sandbox Account: ${account_id || 'Guest'} (Virtual Paper Wallet)` : `Account ID: ${account_id}`}
               </p>
             </div>
           </div>

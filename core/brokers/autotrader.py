@@ -27,8 +27,8 @@ class AutoTraderEngine:
         self.notification_phone: Optional[str] = None
         self.index_scanner = IndexScannerEngine()
         
-        # Track positions managed by the quant daemon (zero fake positions)
-        self.managed_positions: Dict[str, Dict[str, Any]] = {}
+        # Track positions managed by the quant daemon isolated by account_id: {account_id: {symbol: position_dict}}
+        self.managed_positions: Dict[str, Dict[str, Dict[str, Any]]] = {}
         self.execution_logs: List[Dict[str, Any]] = []
         self.supabase = supabase_service
 
@@ -54,11 +54,17 @@ class AutoTraderEngine:
             except Exception:
                 pass
 
-    def _sync_with_holdings(self):
+    def _sync_with_holdings(self, account_id: Optional[str] = None):
         """Auto-registers existing Demat holdings into Auto-Trader surveillance roster with real dynamic ATR levels"""
-        for h in broker_engine.holdings:
+        if not account_id:
+            return
+        acc_id = account_id
+        overview = broker_engine.get_portfolio_overview(acc_id)
+        holdings = overview.get("holdings", [])
+        user_positions = self.managed_positions.setdefault(acc_id, {})
+        for h in holdings:
             sym = h["symbol"].upper()
-            if sym not in self.managed_positions:
+            if sym not in user_positions:
                 buy = h.get("avg_buy_price", 100.0)
                 try:
                     analysis = confluence_engine.analyze_stock(sym)
@@ -77,13 +83,26 @@ class AutoTraderEngine:
                     entry_price=buy,
                     target_1=t1,
                     target_2=t2,
-                    stop_loss=sl
+                    stop_loss=sl,
+                    account_id=acc_id
                 )
 
-    def get_status(self) -> Dict[str, Any]:
-        self._sync_with_holdings()
+    def get_status(self, account_id: Optional[str] = None) -> Dict[str, Any]:
+        if not account_id:
+            return {
+                "is_active": self.is_active,
+                "max_capital_per_trade": self.max_capital_per_trade,
+                "max_open_positions": self.max_open_positions,
+                "active_managed_count": 0,
+                "notification_phone": self.notification_phone,
+                "managed_positions": [],
+                "recent_logs": []
+            }
+        acc_id = account_id
+        self._sync_with_holdings(acc_id)
+        user_positions = self.managed_positions.get(acc_id, {})
         detailed_positions = []
-        for sym, pos in self.managed_positions.items():
+        for sym, pos in user_positions.items():
             ltp = market_data_engine.get_live_price(sym, fallback_price=pos["entry_price"])
             entry = pos["entry_price"]
             t1 = pos["target_1"]
@@ -114,7 +133,7 @@ class AutoTraderEngine:
             "is_active": self.is_active,
             "max_capital_per_trade": self.max_capital_per_trade,
             "max_open_positions": self.max_open_positions,
-            "active_managed_count": len(self.managed_positions),
+            "active_managed_count": len(user_positions),
             "notification_phone": self.notification_phone,
             "managed_positions": detailed_positions,
             "recent_logs": self.execution_logs[:10]
@@ -150,14 +169,20 @@ class AutoTraderEngine:
             self.notification_phone = phone
             whatsapp_alerter.set_config(phone=phone)
 
-    def register_position(self, symbol: str, quantity: int, entry_price: float, target_1: float, stop_loss: float, target_2: Optional[float] = None):
+    def register_position(self, symbol: str, quantity: int, entry_price: float, target_1: float, stop_loss: float, target_2: Optional[float] = None, account_id: Optional[str] = None):
         """
         Registers a position into the autonomous quant daemon for continuous monitoring
         and automatic exit upon reaching Target 1 (+5.55%) or Stop Loss (-2.78%).
         """
+        if not account_id:
+            import uuid
+            acc_id = f"GUEST_{uuid.uuid4().hex[:8].upper()}"
+        else:
+            acc_id = account_id
         sym = symbol.upper()
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.managed_positions[sym] = {
+        user_positions = self.managed_positions.setdefault(acc_id, {})
+        user_positions[sym] = {
             "symbol": sym,
             "quantity": quantity,
             "entry_price": entry_price,
@@ -167,11 +192,15 @@ class AutoTraderEngine:
             "entry_time": now_str
         }
 
-    def unregister_position(self, symbol: str):
+    def unregister_position(self, symbol: str, account_id: Optional[str] = None):
         """
         Removes a position when squared off manually.
         """
-        self.managed_positions.pop(symbol.upper(), None)
+        if not account_id:
+            return
+        acc_id = account_id
+        if acc_id in self.managed_positions:
+            self.managed_positions[acc_id].pop(symbol.upper(), None)
 
     async def run_cycle(self) -> List[Dict[str, Any]]:
         """
@@ -193,115 +222,114 @@ class AutoTraderEngine:
         # -------------------------------------------------------------
         # 1. EVALUATE EXITS (PROFIT BOOKING & RISK DEFENSE)
         # -------------------------------------------------------------
-        symbols_to_exit = []
-        for sym, pos in list(self.managed_positions.items()):
-            ltp = market_data_engine.get_live_price(sym)
-            entry_price = pos["entry_price"]
-            t1 = pos["target_1"]
-            sl = pos["stop_loss"]
-            qty = pos["quantity"]
+        positions_to_exit = []
+        for acc_id, user_positions in list(self.managed_positions.items()):
+            for sym, pos in list(user_positions.items()):
+                ltp = market_data_engine.get_live_price(sym)
+                entry_price = pos["entry_price"]
+                t1 = pos["target_1"]
+                sl = pos["stop_loss"]
+                qty = pos["quantity"]
 
-            # Target 1 Hit -> Book Profit (+5.55%)
-            if ltp >= t1:
-                pnl = round((ltp - entry_price) * qty, 2)
-                pnl_pct = round(((ltp - entry_price) / entry_price) * 100, 2)
-                
-                # Execute broker exit
-                order_rec = {
-                    "symbol": sym,
-                    "side": "SELL",
-                    "quantity": qty,
-                    "price": ltp,
-                    "product": "CNC",
-                    "mode": broker_engine.active_mode,
-                    "timestamp": now_str
-                }
-                extra = {
-                    "realized_pnl": pnl,
-                    "realized_pnl_pct": pnl_pct,
-                    "reason": f"🎯 Target 1 Achieved (+{pnl_pct}%)"
-                }
-                
-                # Execute on broker
-                try:
-                    broker_engine.place_order({
+                # Target 1 Hit -> Book Profit (+5.55%)
+                if ltp >= t1:
+                    pnl = round((ltp - entry_price) * qty, 2)
+                    pnl_pct = round(((ltp - entry_price) / entry_price) * 100, 2)
+                    
+                    order_rec = {
                         "symbol": sym,
-                        "quantity": qty,
                         "side": "SELL",
-                        "product": "CNC"
-                    })
-                except Exception as e:
-                    print("Broker sell error:", e)
+                        "quantity": qty,
+                        "price": ltp,
+                        "product": "CNC",
+                        "mode": "SANDBOX",
+                        "timestamp": now_str
+                    }
+                    extra = {
+                        "realized_pnl": pnl,
+                        "realized_pnl_pct": pnl_pct,
+                        "reason": f"🎯 Target 1 Achieved (+{pnl_pct}%)"
+                    }
+                    
+                    try:
+                        broker_engine.place_order({
+                            "symbol": sym,
+                            "quantity": qty,
+                            "side": "SELL",
+                            "product": "CNC"
+                        }, account_id=acc_id)
+                    except Exception as e:
+                        print("Broker sell error:", e)
 
-                # Send WhatsApp receipt
-                alert_text = whatsapp_alerter.format_execution_alert(order_rec, extra)
-                await whatsapp_alerter.dispatch_whatsapp(alert_text, self.notification_phone)
+                    alert_text = whatsapp_alerter.format_execution_alert(order_rec, extra)
+                    await whatsapp_alerter.dispatch_whatsapp(alert_text, self.notification_phone)
 
-                log_entry = {
-                    "id": f"LOG_{int(asyncio.get_event_loop().time())}_{sym}",
-                    "timestamp": now_str,
-                    "symbol": sym,
-                    "action": "SELL",
-                    "reason": f"Target 1 Hit at ₹{ltp:.2f} (Realized PnL: ₹{pnl:+,.2f})",
-                    "quantity": qty,
-                    "price": ltp,
-                    "status": "FILLED",
-                    "whatsapp_notified": True
-                }
-                self._add_log(log_entry)
-                symbols_to_exit.append(sym)
-                events.append(log_entry)
-
-            # Stop-Loss Hit -> Cut Loss immediately (-2.78%)
-            elif ltp <= sl:
-                pnl = round((ltp - entry_price) * qty, 2)
-                pnl_pct = round(((ltp - entry_price) / entry_price) * 100, 2)
-                
-                order_rec = {
-                    "symbol": sym,
-                    "side": "SELL",
-                    "quantity": qty,
-                    "price": ltp,
-                    "product": "CNC",
-                    "mode": broker_engine.active_mode,
-                    "timestamp": now_str
-                }
-                extra = {
-                    "realized_pnl": pnl,
-                    "realized_pnl_pct": pnl_pct,
-                    "reason": f"🛑 Stop-Loss Triggered ({pnl_pct}%)"
-                }
-
-                try:
-                    broker_engine.place_order({
+                    log_entry = {
+                        "id": f"LOG_{int(asyncio.get_event_loop().time())}_{sym}",
+                        "timestamp": now_str,
                         "symbol": sym,
+                        "action": "SELL",
+                        "reason": f"Target 1 Hit at ₹{ltp:.2f} (Realized PnL: ₹{pnl:+,.2f})",
                         "quantity": qty,
+                        "price": ltp,
+                        "status": "FILLED",
+                        "whatsapp_notified": True
+                    }
+                    self._add_log(log_entry)
+                    positions_to_exit.append((acc_id, sym))
+                    events.append(log_entry)
+
+                # Stop-Loss Hit -> Cut Loss immediately (-2.78%)
+                elif ltp <= sl:
+                    pnl = round((ltp - entry_price) * qty, 2)
+                    pnl_pct = round(((ltp - entry_price) / entry_price) * 100, 2)
+                    
+                    order_rec = {
+                        "symbol": sym,
                         "side": "SELL",
-                        "product": "CNC"
-                    })
-                except Exception as e:
-                    print("Broker sell error:", e)
+                        "quantity": qty,
+                        "price": ltp,
+                        "product": "CNC",
+                        "mode": "SANDBOX",
+                        "timestamp": now_str
+                    }
+                    extra = {
+                        "realized_pnl": pnl,
+                        "realized_pnl_pct": pnl_pct,
+                        "reason": f"🛑 Stop-Loss Triggered ({pnl_pct}%)"
+                    }
 
-                alert_text = whatsapp_alerter.format_execution_alert(order_rec, extra)
-                await whatsapp_alerter.dispatch_whatsapp(alert_text, self.notification_phone)
+                    try:
+                        broker_engine.place_order({
+                            "symbol": sym,
+                            "quantity": qty,
+                            "side": "SELL",
+                            "product": "CNC"
+                        }, account_id=acc_id)
+                    except Exception as e:
+                        print("Broker sell error:", e)
 
-                log_entry = {
-                    "id": f"LOG_{int(asyncio.get_event_loop().time())}_{sym}",
-                    "timestamp": now_str,
-                    "symbol": sym,
-                    "action": "SELL",
-                    "reason": f"Stop-Loss Cut at ₹{ltp:.2f} (Realized PnL: ₹{pnl:+,.2f})",
-                    "quantity": qty,
-                    "price": ltp,
-                    "status": "FILLED",
-                    "whatsapp_notified": True
-                }
-                self._add_log(log_entry)
-                symbols_to_exit.append(sym)
-                events.append(log_entry)
+                    alert_text = whatsapp_alerter.format_execution_alert(order_rec, extra)
+                    await whatsapp_alerter.dispatch_whatsapp(alert_text, self.notification_phone)
 
-        for sym in symbols_to_exit:
-            self.managed_positions.pop(sym, None)
+                    log_entry = {
+                        "id": f"LOG_{int(asyncio.get_event_loop().time())}_{sym}",
+                        "timestamp": now_str,
+                        "symbol": sym,
+                        "action": "SELL",
+                        "reason": f"Stop-Loss Cut at ₹{ltp:.2f} (Realized PnL: ₹{pnl:+,.2f})",
+                        "quantity": qty,
+                        "price": ltp,
+                        "status": "FILLED",
+                        "whatsapp_notified": True
+                    }
+                    self._add_log(log_entry)
+                    positions_to_exit.append((acc_id, sym))
+                    events.append(log_entry)
+
+        for acc_id, sym in positions_to_exit:
+            if acc_id in self.managed_positions:
+                self.managed_positions[acc_id].pop(sym, None)
 
         # -------------------------------------------------------------
         # 2. EVALUATE ENTRIES (MINERVINI VCP PIVOT BREAKOUTS)

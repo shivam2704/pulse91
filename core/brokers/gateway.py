@@ -14,21 +14,18 @@ from ..services import market_data_engine, whatsapp_alerter, supabase_service
 from .groww import groww_adapter
 
 class BrokerEngine:
-    DEFAULT_ACCOUNT = "PULSE91-DEMAT-SBX-01"
-
     def __init__(self):
         self.market_data = market_data_engine
         self.supabase = supabase_service
         self._sessions: Dict[str, Dict[str, Any]] = {}
-        # Pre-initialize default sandbox session
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)
 
     def _get_or_create_session(self, account_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Retrieves or initializes an isolated user session.
         If Supabase is active, loads portfolio & holdings for this account_id.
         """
-        acc_id = account_id or self.DEFAULT_ACCOUNT
+        import uuid
+        acc_id = account_id if (account_id and str(account_id).strip()) else f"GUEST_{uuid.uuid4().hex[:8].upper()}"
         if acc_id not in self._sessions:
             sess: Dict[str, Any] = {
                 "account_id": acc_id,
@@ -49,89 +46,35 @@ class BrokerEngine:
                         sess["broker_name"] = sb_port.get("broker", "Pulse91 Sandbox Broker")
                         sess["initial_balance"] = sb_port.get("initial_balance", 10000.00)
                         sess["available_cash"] = sb_port.get("available_cash", 10000.00)
+                    else:
+                        # Auto-persist initial clean sandbox portfolio into Supabase
+                        self.supabase.save_portfolio({
+                            "account_id": acc_id,
+                            "mode": "SANDBOX",
+                            "broker": "Pulse91 Sandbox Broker",
+                            "initial_balance": 10000.00,
+                            "available_cash": 10000.00
+                        })
                     sb_holdings = self.supabase.load_holdings(acc_id, mode="SANDBOX")
                     if sb_holdings is not None:
                         sess["holdings"] = sb_holdings
                     sb_orders = self.supabase.load_orders(acc_id, limit=50)
                     if sb_orders is not None:
                         sess["orders"] = sb_orders
-                except Exception:
-                    pass
+                except Exception as e:
+                    import logging
+                    logging.getLogger("pulse91.gateway").error(f"Error loading Supabase session for {acc_id}: {e}")
             self._sessions[acc_id] = sess
         return self._sessions[acc_id]
 
-    # --- Backward-Compatibility Properties (Operate on Default Session) ---
+    # --- Default Properties (Read-Only Safe Defaults) ---
     @property
     def active_mode(self) -> str:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["active_mode"]
-
-    @active_mode.setter
-    def active_mode(self, val: str):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["active_mode"] = val
+        return "SANDBOX"
 
     @property
     def broker_name(self) -> str:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["broker_name"]
-
-    @broker_name.setter
-    def broker_name(self, val: str):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["broker_name"] = val
-
-    @property
-    def account_id(self) -> str:
-        return self.DEFAULT_ACCOUNT
-
-    @account_id.setter
-    def account_id(self, val: str):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["account_id"] = val
-
-    @property
-    def initial_balance(self) -> float:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["initial_balance"]
-
-    @initial_balance.setter
-    def initial_balance(self, val: float):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["initial_balance"] = val
-
-    @property
-    def available_cash(self) -> float:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["available_cash"]
-
-    @available_cash.setter
-    def available_cash(self, val: float):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["available_cash"] = val
-
-    @property
-    def holdings(self) -> List[Dict[str, Any]]:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["holdings"]
-
-    @holdings.setter
-    def holdings(self, val: List[Dict[str, Any]]):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["holdings"] = val
-
-    @property
-    def positions(self) -> List[Dict[str, Any]]:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["positions"]
-
-    @positions.setter
-    def positions(self, val: List[Dict[str, Any]]):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["positions"] = val
-
-    @property
-    def orders(self) -> List[Dict[str, Any]]:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["orders"]
-
-    @orders.setter
-    def orders(self, val: List[Dict[str, Any]]):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["orders"] = val
-
-    @property
-    def gtt_triggers(self) -> List[Dict[str, Any]]:
-        return self._get_or_create_session(self.DEFAULT_ACCOUNT)["gtt_triggers"]
-
-    @gtt_triggers.setter
-    def gtt_triggers(self, val: List[Dict[str, Any]]):
-        self._get_or_create_session(self.DEFAULT_ACCOUNT)["gtt_triggers"] = val
+        return "Pulse91 Sandbox Broker"
 
     # --- Multi-Tenant Methods ---
 
@@ -179,8 +122,24 @@ class BrokerEngine:
         """
         Calculates live Demat valuation, invested capital, available cash,
         realized & unrealized PnL based on live NSE tick prices for the given user.
+        Always synchronizes with Supabase PostgreSQL as the primary source of truth.
         """
         sess = self._get_or_create_session(account_id)
+
+        # Synchronize live from Supabase PostgreSQL (eliminates memory drift & server overhead)
+        if sess["active_mode"] == "SANDBOX" and self.supabase and self.supabase.is_active:
+            try:
+                sb_port = self.supabase.load_portfolio(sess["account_id"], mode="SANDBOX")
+                if sb_port:
+                    sess["available_cash"] = sb_port.get("available_cash", sess["available_cash"])
+                    sess["initial_balance"] = sb_port.get("initial_balance", sess["initial_balance"])
+                sb_h = self.supabase.load_holdings(sess["account_id"], mode="SANDBOX")
+                if sb_h is not None:
+                    sess["holdings"] = sb_h
+            except Exception as e:
+                import logging
+                logging.getLogger("pulse91.gateway").warning(f"Supabase portfolio refresh note: {e}")
+
         active_holdings = sess["holdings"]
         current_cash = sess["available_cash"]
 
@@ -330,6 +289,8 @@ class BrokerEngine:
             "product": product,
             "quantity": quantity,
             "price": execution_price,
+            "sl_price": order_data.get("sl_price"),
+            "target_price": order_data.get("target_price"),
             "status": order_status,
             "order_session": "LIVE_MARKET" if is_market_live else "AMO_EOD",
             "timestamp": now_str,
@@ -405,7 +366,7 @@ class BrokerEngine:
         # Supabase Persistence Sync
         if self.supabase and self.supabase.is_active:
             try:
-                self.supabase.save_order(order_record)
+                # 1. Upsert portfolio first (foreign key dependency for holdings!)
                 self.supabase.save_portfolio({
                     "account_id": sess["account_id"],
                     "mode": sess["active_mode"],
@@ -413,6 +374,9 @@ class BrokerEngine:
                     "initial_balance": sess["initial_balance"],
                     "available_cash": sess["available_cash"]
                 })
+                # 2. Insert order audit log
+                self.supabase.save_order(order_record)
+                # 3. Synchronize holdings
                 if side == "BUY" and product == "CNC":
                     h = next((x for x in sess["holdings"] if x["symbol"] == symbol), None)
                     if h:
@@ -423,8 +387,10 @@ class BrokerEngine:
                         self.supabase.save_holding(sess["account_id"], h, mode=sess["active_mode"])
                     else:
                         self.supabase.delete_holding(sess["account_id"], symbol, mode=sess["active_mode"])
-            except Exception:
-                pass
+            except Exception as e:
+                import logging
+                logging.getLogger("pulse91.gateway").error(f"Failed to synchronize order with Supabase: {e}")
+                raise RuntimeError(f"Database sync failed: {str(e)}")
 
         return {
             "success": True,
@@ -523,8 +489,6 @@ class BrokerEngine:
 
             if self.supabase and self.supabase.is_active:
                 try:
-                    self.supabase.delete_holding(sess["account_id"], sym, mode=sess["active_mode"])
-                    self.supabase.save_order(order_record)
                     self.supabase.save_portfolio({
                         "account_id": sess["account_id"],
                         "mode": sess["active_mode"],
@@ -532,8 +496,12 @@ class BrokerEngine:
                         "initial_balance": sess["initial_balance"],
                         "available_cash": sess["available_cash"]
                     })
-                except Exception:
-                    pass
+                    self.supabase.save_order(order_record)
+                    self.supabase.delete_holding(sess["account_id"], sym, mode=sess["active_mode"])
+                except Exception as e:
+                    import logging
+                    logging.getLogger("pulse91.gateway").error(f"Failed to synchronize exit with Supabase: {e}")
+                    raise RuntimeError(f"Database sync failed: {str(e)}")
 
             return {
                 "success": True,
@@ -547,9 +515,13 @@ class BrokerEngine:
 
     def get_history(self, account_id: Optional[str] = None) -> Dict[str, Any]:
         """
-        Returns order logs and GTT triggers for this user account.
+        Returns order logs and GTT triggers for this user account, synced from Supabase.
         """
         sess = self._get_or_create_session(account_id)
+        if self.supabase and self.supabase.is_active:
+            sb_orders = self.supabase.load_orders(sess["account_id"], limit=50)
+            if sb_orders is not None:
+                sess["orders"] = sb_orders
         return {
             "orders": sess["orders"],
             "gtt_triggers": sess["gtt_triggers"]

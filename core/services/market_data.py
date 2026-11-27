@@ -180,6 +180,7 @@ STOCK_METADATA: Dict[str, Dict[str, Any]] = {
     "POWERGRID": {"name": "Power Grid Corp of India", "sector": "Power & Utilities", "base_price": 325.00, "pe": 18.2, "roce": 13.8, "debt_eq": 1.55, "pat_growth": 7.5},
     "TATASTEEL": {"name": "Tata Steel Ltd", "sector": "Metals & Mining", "base_price": 148.50, "pe": 34.2, "roce": 9.4, "debt_eq": 0.95, "pat_growth": 12.0},
     "M&M": {"name": "Mahindra & Mahindra Ltd", "sector": "Automobile", "base_price": 2890.00, "pe": 31.4, "roce": 21.5, "debt_eq": 1.10, "pat_growth": 24.5},
+    "TVSMOTOR": {"name": "TVS Motor Company Ltd", "sector": "Automobile", "base_price": 4550.00, "pe": 58.2, "roce": 26.4, "debt_eq": 1.45, "pat_growth": 28.0},
     "JSWSTEEL": {"name": "JSW Steel Ltd", "sector": "Metals & Mining", "base_price": 965.00, "pe": 28.5, "roce": 11.2, "debt_eq": 1.25, "pat_growth": 15.0},
     "ZOMATO": {"name": "Zomato Ltd (Eternal)", "sector": "Consumer Internet", "base_price": 268.00, "pe": 110.0, "roce": 9.5, "debt_eq": 0.05, "pat_growth": 85.0},
     "HAL": {"name": "Hindustan Aeronautics Ltd", "sector": "Defence & Aerospace", "base_price": 4320.00, "pe": 38.5, "roce": 29.5, "debt_eq": 0.00, "pat_growth": 22.0},
@@ -532,13 +533,19 @@ class MarketDataEngine:
         cache_key = f"{sym}_{timeframe}"
         now = time.time()
         market_open = is_nse_market_open()
-        cache_duration = 60.0 if market_open else 1800.0
+        if market_open:
+            cache_duration = 15.0 if timeframe in ("1m", "3m", "5m") else 60.0
+        else:
+            cache_duration = 1800.0
 
         cached = self._stock_candle_cache.get(cache_key)
         if cached and (now - cached.get("timestamp", 0) < cache_duration):
             return cached.get("candles")
 
         tf_map = {
+            "1m": ("1m", "5d"),
+            "3m": ("1m", "5d"),   # Aggregated into 3-minute OHLCV buckets
+            "5m": ("5m", "1mo"),
             "15m": ("15m", "1mo"),
             "1H": ("1h", "3mo"),
             "D": ("1d", "2y"),
@@ -587,6 +594,28 @@ class MarketDataEngine:
                 if not candles:
                     return None
 
+                # Resample 1m bars into 3m OHLCV buckets if 3m timeframe requested
+                if timeframe == "3m":
+                    buckets: Dict[int, Dict[str, Any]] = {}
+                    for c in candles:
+                        b_time = (c["time"] // 180) * 180
+                        if b_time not in buckets:
+                            buckets[b_time] = {
+                                "time": b_time,
+                                "open": c["open"],
+                                "high": c["high"],
+                                "low": c["low"],
+                                "close": c["close"],
+                                "volume": c["volume"],
+                            }
+                        else:
+                            b = buckets[b_time]
+                            b["high"] = max(b["high"], c["high"])
+                            b["low"] = min(b["low"], c["low"])
+                            b["close"] = c["close"]
+                            b["volume"] += c["volume"]
+                    candles = [buckets[k] for k in sorted(buckets.keys())]
+
                 # Compute MAs for institutional trend confluence
                 closes = [c["close"] for c in candles]
                 for i, c in enumerate(candles):
@@ -626,16 +655,17 @@ class MarketDataEngine:
             interval_secs = 3600
             visible_count = 120
             warmup_count = 200  # 200 warm-up bars for 200-period hourly baseline
-        else: # 15m
-            interval_secs = 900
-            visible_count = 100
-            warmup_count = 200  # 200 warm-up bars so 200-period 15m MA is accurate & close to price
+        else:  # Intraday: 1m, 3m, 5m, 15m
+            intraday_secs = {"1m": 60, "3m": 180, "5m": 300, "15m": 900}
+            interval_secs = intraday_secs.get(timeframe, 900)
+            visible_count = 120
+            warmup_count = 200  # 200 warm-up bars so 200-period intraday MA is accurate & close to price
 
         actual_visible = count if count > 0 else visible_count
         total_count = actual_visible + warmup_count
         all_candles = []
 
-        if timeframe == "15m":
+        if timeframe in ("1m", "3m", "5m", "15m"):
             # Realistic intraday session waves (25 bars per trading day)
             base = current_p * 0.985
             price = base

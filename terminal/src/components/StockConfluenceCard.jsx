@@ -1,9 +1,12 @@
 import React from 'react';
 import { CheckCircle2, AlertTriangle, ShieldCheck, Target, ArrowRight, TrendingUp, Layers, Percent, BarChart3, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import StockCandleChart from './StockCandleChart';
+import StockOrderBookPanel from './StockOrderBookPanel';
+import { formatINR, formatBuyZone, formatHorizon } from '../utils/formatters';
 
 export default function StockConfluenceCard({
   stockData,
+  dematMode,
   onExecuteOrder,
   onOpenWhatsApp,
   onClose,
@@ -52,9 +55,9 @@ export default function StockConfluenceCard({
               </span>
             </div>
             <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-              <span>LTP: <strong className="font-mono text-white text-sm">₹{ltp?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></span>
+              <span>LTP: <strong className="font-mono text-white text-sm">{formatINR(ltp)}</strong></span>
               <span>•</span>
-              <span>Horizon: <strong className="text-gray-200">{horizon_name}</strong></span>
+              <span>Horizon: <strong className="text-gray-200">{formatHorizon(horizon_name)}</strong></span>
             </div>
           </div>
         </div>
@@ -105,39 +108,51 @@ export default function StockConfluenceCard({
       <div className="bg-[#111726] border border-[#1e283d] rounded-lg p-3.5 mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         <div>
           <span className="text-gray-400 block text-[11px]">Recommended Buy Zone</span>
-          <span className="font-mono font-bold text-white text-xs">{trade_plan?.entry_range}</span>
+          <span className="font-mono font-bold text-white text-xs">{formatBuyZone(trade_plan?.entry_range, ltp)}</span>
         </div>
         <div>
           <span className="text-gray-400 block text-[11px]">Stop-Loss Level</span>
           <span className="font-mono font-bold text-red-400 text-xs">
-            ₹{trade_plan?.stop_loss_price?.toLocaleString('en-IN')} (-{trade_plan?.stop_loss_pct}%)
+            {formatINR(trade_plan?.stop_loss_price)} (-{Number(trade_plan?.stop_loss_pct || 0).toFixed(2)}%)
           </span>
         </div>
         <div>
           <span className="text-gray-400 block text-[11px]">Target 1 (1:2 R:R)</span>
           <span className="font-mono font-bold text-emerald-400 text-xs">
-            ₹{trade_plan?.target_1_price?.toLocaleString('en-IN')} (+{trade_plan?.target_1_pct}%)
+            {formatINR(trade_plan?.target_1_price)} (+{Number(trade_plan?.target_1_pct || 0).toFixed(2)}%)
           </span>
         </div>
         <div>
           <span className="text-gray-400 block text-[11px]">Target 2 (1:3.2 R:R)</span>
           <span className="font-mono font-bold text-emerald-400 text-xs">
-            ₹{trade_plan?.target_2_price?.toLocaleString('en-IN')} (+{trade_plan?.target_2_pct}%)
+            {formatINR(trade_plan?.target_2_price)} (+{Number(trade_plan?.target_2_pct || 0).toFixed(2)}%)
           </span>
         </div>
       </div>
 
-      {/* TradingView Lightweight Candlestick & Volume Chart with Quant Overlays */}
-      <StockCandleChart
-        symbol={symbol}
-        ltp={ltp}
-        tradePlan={{
-          target_1: trade_plan?.target_1_price,
-          target_2: trade_plan?.target_2_price,
-          stop_loss_price: trade_plan?.stop_loss_price
-        }}
-        vcpData={minervini_vcp}
-      />
+      {/* TradingView Lightweight Candlestick Chart + Orders & Depth Side Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 items-start">
+        <div className="lg:col-span-2">
+          <StockCandleChart
+            symbol={symbol}
+            ltp={ltp}
+            tradePlan={{
+              target_1: trade_plan?.target_1_price,
+              target_2: trade_plan?.target_2_price,
+              stop_loss_price: trade_plan?.stop_loss_price
+            }}
+            vcpData={minervini_vcp}
+          />
+        </div>
+        <div className="lg:col-span-1">
+          <StockOrderBookPanel
+            symbol={symbol}
+            ltp={ltp}
+            dematMode={dematMode}
+            onExecuteOrder={() => onExecuteOrder && onExecuteOrder(stockData)}
+          />
+        </div>
+      </div>
 
       {/* 5-Pillar Scorecard Grid */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4 text-xs">

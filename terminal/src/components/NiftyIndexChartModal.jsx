@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { X, TrendingUp, BarChart2, ShieldCheck } from 'lucide-react';
 import StockCandleChart from './StockCandleChart';
+import { formatHorizon } from '../utils/formatters';
 
 export default function NiftyIndexChartModal({ isOpen, onClose, market }) {
   useEffect(() => {
@@ -98,7 +99,7 @@ export default function NiftyIndexChartModal({ isOpen, onClose, market }) {
             <div className="border-l border-[#1e2638] pl-3">
               <span className="text-gray-500 text-[11px] mr-1.5">Regime:</span>
               <span className="font-mono font-semibold text-white">
-                {market?.regime_status ?? 'BULLISH_TRENDING'}
+                {formatHorizon(market?.regime_status ?? 'BULLISH_TRENDING')}
               </span>
             </div>
           </div>

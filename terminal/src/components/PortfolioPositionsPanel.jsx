@@ -277,8 +277,7 @@ export default function PortfolioPositionsPanel({
             <div className={`text-base font-bold ${
               (demat?.total_unrealized_pnl ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
             }`}>
-              ₹{(demat?.total_unrealized_pnl ?? 0) >= 0 ? '+' : ''}
-              {(demat?.total_unrealized_pnl ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {(demat?.total_unrealized_pnl ?? 0) >= 0 ? '+' : '-'}₹{Math.abs(demat?.total_unrealized_pnl ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
@@ -316,9 +315,11 @@ export default function PortfolioPositionsPanel({
                       className="hover:bg-[#131926] transition-colors cursor-pointer"
                       onClick={() => onSelectStock(pos.symbol)}
                     >
-                      <td className="py-3 px-3 font-mono font-bold text-white flex items-center gap-1.5">
-                        {pos.symbol}
-                        <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
+                      <td className="py-3 px-3">
+                        <div className="font-mono font-bold text-white flex items-center gap-1.5">
+                          {pos.symbol}
+                          <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-semibold">
@@ -376,9 +377,11 @@ export default function PortfolioPositionsPanel({
                       className="hover:bg-[#131926] transition-colors cursor-pointer"
                       onClick={() => onSelectStock(h.symbol)}
                     >
-                      <td className="py-3 px-3 font-mono font-bold text-white flex items-center gap-1.5">
-                        {h.symbol}
-                        <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
+                      <td className="py-3 px-3">
+                        <div className="font-mono font-bold text-white flex items-center gap-1.5">
+                          {h.symbol}
+                          <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
+                        </div>
                       </td>
                       <td className="py-3 px-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
@@ -488,7 +491,7 @@ export default function PortfolioPositionsPanel({
 
       {/* 4. Sleek Institutional Exit / Square-Off Confirmation Modal */}
       {exitTarget && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0c101a] border border-[#20293d] rounded-2xl w-full max-w-md shadow-2xl p-6">
             {/* Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-[#1b2336]">

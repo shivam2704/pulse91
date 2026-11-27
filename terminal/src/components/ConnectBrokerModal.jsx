@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Key, Lock, ArrowRight, ExternalLink, CheckCircle, AlertCircle, User, Smartphone } from 'lucide-react';
+import { api } from '../services/api';
 
 const BROKERS_CONFIG = {
   Groww: {
@@ -57,7 +58,9 @@ export default function ConnectBrokerModal({
   activeBroker,
   activeMode,
   onConnected,
-  onDisconnect
+  onDisconnect,
+  currentUser,
+  onOpenAuthModal
 }) {
   if (!isOpen) return null;
 
@@ -96,14 +99,8 @@ export default function ConnectBrokerModal({
     };
 
     try {
-      const res = await fetch('/api/v1/demat/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await api.demat.connectBroker(payload);
+      if (data.success) {
         setStatusMessage({ type: 'success', text: data.message });
         setTimeout(() => {
           onConnected(selectedBroker);
@@ -113,7 +110,7 @@ export default function ConnectBrokerModal({
         setStatusMessage({ type: 'error', text: data.detail || 'Authentication failed. Check your API credentials.' });
       }
     } catch (err) {
-      setStatusMessage({ type: 'error', text: err.message || 'Network connection error' });
+      setStatusMessage({ type: 'error', text: err.message || 'Authentication error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -122,7 +119,7 @@ export default function ConnectBrokerModal({
   const handleDisconnect = async () => {
     setIsSubmitting(true);
     try {
-      await fetch('/api/v1/demat/disconnect', { method: 'POST' });
+      await api.demat.disconnectBroker();
       onDisconnect();
       setStatusMessage({ type: 'success', text: 'Disconnected broker. Returned to Sandbox mode.' });
       setTimeout(onClose, 1000);
@@ -155,118 +152,156 @@ export default function ConnectBrokerModal({
           </button>
         </div>
 
-        {/* Broker Selector Tabs */}
-        <div className="mt-4">
-          <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-2">
-            Select Live Demat Broker:
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {Object.keys(BROKERS_CONFIG).map((key) => {
-              const b = BROKERS_CONFIG[key];
-              const isSelected = selectedBroker === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setSelectedBroker(key);
-                    setStatusMessage(null);
-                  }}
-                  className={`py-2 px-2.5 rounded-lg text-xs font-semibold border transition-all text-center ${
-                    isSelected
-                      ? 'bg-emerald-500/15 border-emerald-500/80 text-emerald-300'
-                      : 'bg-[#121724] border-[#1e2638] text-gray-400 hover:text-gray-200 hover:bg-[#161e30]'
-                  }`}
-                >
-                  {b.name.split(' ')[0]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Broker Meta & Official Docs Link */}
-        <div className="mt-3.5 bg-[#101625] border border-[#1b2538] rounded-lg p-3 text-xs">
-          <div className="flex items-center justify-between text-gray-200 font-semibold mb-1">
-            <span>{currentBroker.name}</span>
-            <a
-              href={currentBroker.portalUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-emerald-400 hover:underline flex items-center gap-1 font-mono text-[11px]"
-            >
-              API Portal <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-          <p className="text-gray-400 text-[11px] leading-relaxed">{currentBroker.helpGuide}</p>
-        </div>
-
-        {/* Dynamic Credentials Form */}
-        <form onSubmit={handleConnect} className="mt-4 space-y-3 text-xs">
-          {currentBroker.fields.map((f) => {
-            const IconComponent = f.icon || Key;
-            return (
-              <div key={f.key}>
-                <label className="text-gray-300 font-semibold block mb-1">
-                  {f.label}:
-                </label>
-                <div className="relative">
-                  <IconComponent className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={f.type}
-                    placeholder={f.placeholder}
-                    value={formData[f.key] || ''}
-                    onChange={(e) => handleInputChange(f.key, e.target.value)}
-                    required={!f.label.includes('Optional')}
-                    className="w-full bg-[#131928] border border-[#20293d] rounded-lg pl-9 pr-3 py-2 font-mono text-white text-xs focus:outline-none focus:border-emerald-500/60"
-                  />
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Status Alert */}
-          {statusMessage && (
-            <div className={`p-2.5 rounded-lg flex items-center gap-2 text-xs ${
-              statusMessage.type === 'success'
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                : 'bg-red-500/15 text-red-400 border border-red-500/30'
-            }`}>
-              {statusMessage.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-              <span>{statusMessage.text}</span>
+        {/* Guest Lock Guard: If not signed in, show Sign In barrier */}
+        {!currentUser ? (
+          <div className="mt-5 p-6 bg-[#121826] border border-amber-500/30 rounded-xl text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3.5">
+              <Lock className="w-6 h-6" />
             </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-2">
-            {activeMode === 'LIVE_DEMAT' && (
+            <h4 className="text-sm font-bold text-white mb-2">Sign In Required for Real Broker Integration</h4>
+            <p className="text-xs text-gray-400 mb-5 max-w-sm mx-auto leading-relaxed">
+              To safeguard real funds and encrypt your API keys in your private vault, connecting live broker accounts (Groww, Zerodha, Dhan, Angel One) is restricted to authenticated users.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
               <button
                 type="button"
-                onClick={handleDisconnect}
-                disabled={isSubmitting}
-                className="text-xs text-red-400 hover:underline"
+                onClick={() => {
+                  onClose();
+                  onOpenAuthModal?.();
+                }}
+                className="w-full sm:w-auto bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs px-5 py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
               >
-                Disconnect & Return to Sandbox
+                <User className="w-4 h-4" />
+                <span>Sign In / Create Account</span>
               </button>
-            )}
-            <div className="flex items-center gap-2 ml-auto">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-3 py-2 rounded-lg bg-[#141b2a] text-gray-400 hover:text-white text-xs"
+                className="w-full sm:w-auto bg-[#1a2336] hover:bg-[#222f47] text-gray-300 text-xs px-4 py-2.5 rounded-lg transition-colors cursor-pointer"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-lg disabled:opacity-50"
-              >
-                {isSubmitting ? 'Verifying with Broker...' : `Connect ${selectedBroker}`}
+                Continue in Sandbox
               </button>
             </div>
           </div>
-        </form>
+        ) : (
+          /* Form for authenticated users */
+          <>
+            {/* Broker Selector Tabs */}
+            <div className="mt-4">
+              <label className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-2">
+                Select Live Demat Broker:
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {Object.keys(BROKERS_CONFIG).map((key) => {
+                  const b = BROKERS_CONFIG[key];
+                  const isSelected = selectedBroker === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBroker(key);
+                        setStatusMessage(null);
+                      }}
+                      className={`py-2 px-2.5 rounded-lg text-xs font-semibold border transition-all text-center ${
+                        isSelected
+                          ? 'bg-emerald-500/15 border-emerald-500/80 text-emerald-300'
+                          : 'bg-[#121724] border-[#1e2638] text-gray-400 hover:text-gray-200 hover:bg-[#161e30]'
+                      }`}
+                    >
+                      {b.name.split(' ')[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Broker Meta & Official Docs Link */}
+            <div className="mt-3.5 bg-[#101625] border border-[#1b2538] rounded-lg p-3 text-xs">
+              <div className="flex items-center justify-between text-gray-200 font-semibold mb-1">
+                <span>{currentBroker.name}</span>
+                <a
+                  href={currentBroker.portalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] text-emerald-400 hover:underline"
+                >
+                  <span>API Portal</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                {currentBroker.helpGuide}
+              </p>
+            </div>
+
+            {/* Connect Form */}
+            <form onSubmit={handleConnect} className="mt-4 space-y-3">
+              {currentBroker.fields.map((field) => {
+                const IconComponent = field.icon;
+                return (
+                  <div key={field.key}>
+                    <label className="block text-xs font-semibold text-gray-300 mb-1">
+                      {field.label}
+                    </label>
+                    <div className="relative flex items-center">
+                      <div className="absolute left-3 text-gray-500 pointer-events-none">
+                        <IconComponent className="w-4 h-4" />
+                      </div>
+                      <input
+                        type={field.type}
+                        value={formData[field.key] || ''}
+                        onChange={(e) => handleInputChange(field.key, e.target.value)}
+                        placeholder={field.placeholder}
+                        required
+                        className="w-full bg-[#121724] border border-[#1e2638] rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500/80 font-mono transition-colors"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {statusMessage && (
+                <div
+                  className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                    statusMessage.type === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-300'
+                  }`}
+                >
+                  {statusMessage.type === 'success' ? (
+                    <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                  )}
+                  <span>{statusMessage.text}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-between gap-3">
+                {activeMode === 'LIVE_DEMAT' && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={handleDisconnect}
+                    className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-semibold transition-colors"
+                  >
+                    Disconnect
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 ml-auto"
+                >
+                  <span>{isSubmitting ? 'Authenticating...' : `Connect ${selectedBroker} Account`}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

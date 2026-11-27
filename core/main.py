@@ -39,6 +39,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import uuid
+from fastapi import Request
+
+@app.middleware("http")
+async def dynamic_guest_session_middleware(request: Request, call_next):
+    """
+    Guarantees every request has a unique guest identity with zero static fallbacks.
+    If no cookie or header is present (e.g., user deleted cookies), generates a brand
+    new guest ID and automatically attaches Set-Cookie to the HTTP response.
+    """
+    existing_cookie = request.cookies.get("pulse91_guest_id")
+    existing_header = request.headers.get("X-Guest-ID")
+    auth_header = request.headers.get("Authorization")
+
+    needs_new_cookie = False
+    guest_id = None
+
+    if not auth_header:
+        candidate = existing_header or existing_cookie
+        if candidate and str(candidate).strip().startswith("GUEST_"):
+            guest_id = str(candidate).strip()
+        else:
+            guest_id = f"GUEST_{uuid.uuid4().hex[:8].upper()}"
+            needs_new_cookie = True
+        request.state.guest_id = guest_id
+
+    response = await call_next(request)
+
+    if needs_new_cookie and guest_id:
+        response.set_cookie(
+            key="pulse91_guest_id",
+            value=guest_id,
+            max_age=3600,
+            path="/",
+            samesite="lax",
+            httponly=False
+        )
+
+    return response
+
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -53,14 +93,13 @@ app.include_router(alerts_router)
 @app.get("/api/v1/health")
 def health_check():
     regime = market_data_engine.get_market_regime()
-    portfolio = broker_engine.get_portfolio_overview()
     return {
         "status": "ONLINE",
         "service": "Pulse91 Core Engine",
         "market": "NSE / BSE Live Simulator",
         "nifty_50": regime["nifty_ltp"],
         "regime": regime["regime_status"],
-        "broker_mode": portfolio["mode"],
+        "broker_mode": "SANDBOX",
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S IST")
     }
 
@@ -89,9 +128,8 @@ async def websocket_endpoint(websocket: WebSocket):
     connected_clients.add(websocket)
     try:
         while True:
-            # Broadcast live state every 2 seconds
+            # Broadcast live market regime state every 2 seconds
             regime = market_data_engine.get_market_regime()
-            portfolio = broker_engine.get_portfolio_overview()
             
             payload = {
                 "type": "TICK_UPDATE",
@@ -106,8 +144,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     "fii_dii_date": regime.get("fii_dii_date"),
                     "is_market_open": regime.get("is_market_open", False),
                     "session_status": regime.get("session_status", "MARKET CLOSED")
-                },
-                "demat": portfolio
+                }
             }
             await websocket.send_text(json.dumps(payload))
             await asyncio.sleep(2.0)

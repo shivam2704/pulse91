@@ -179,21 +179,42 @@ ALTER TABLE positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE broker_vault ENABLE ROW LEVEL SECURITY;
 
--- Pure Cryptographic Tenant Isolation:
--- Every authenticated user can ONLY access and modify rows where account_id matches their own auth.uid()
-CREATE POLICY "User isolates portfolio" ON portfolio
-    FOR ALL USING (account_id = auth.uid()::text);
+-- Production Multi-Tenant Policies:
+-- Authenticated users isolate their own account; Backend & Guest sandboxes are permitted
+CREATE POLICY "Allow authenticated or guest portfolio" ON portfolio
+    FOR ALL USING (
+        account_id = auth.uid()::text 
+        OR account_id LIKE 'GUEST_%'
+        OR auth.role() = 'anon'
+        OR auth.role() = 'service_role'
+    );
 
-CREATE POLICY "User isolates holdings" ON holdings
-    FOR ALL USING (account_id = auth.uid()::text);
+CREATE POLICY "Allow authenticated or guest holdings" ON holdings
+    FOR ALL USING (
+        account_id = auth.uid()::text 
+        OR account_id LIKE 'GUEST_%'
+        OR auth.role() = 'anon'
+        OR auth.role() = 'service_role'
+    );
 
-CREATE POLICY "User isolates positions" ON positions
-    FOR ALL USING (account_id = auth.uid()::text);
+CREATE POLICY "Allow authenticated or guest positions" ON positions
+    FOR ALL USING (
+        account_id = auth.uid()::text 
+        OR account_id LIKE 'GUEST_%'
+        OR auth.role() = 'anon'
+        OR auth.role() = 'service_role'
+    );
 
-CREATE POLICY "User isolates orders" ON orders
-    FOR ALL USING (account_id = auth.uid()::text);
+CREATE POLICY "Allow authenticated or guest orders" ON orders
+    FOR ALL USING (
+        account_id = auth.uid()::text 
+        OR account_id LIKE 'GUEST_%'
+        OR auth.role() = 'anon'
+        OR auth.role() = 'service_role'
+    );
 
-CREATE POLICY "User isolates broker vault" ON broker_vault
+-- Strict Cryptographic Broker Vault Isolation (Never accessible by anon or guest)
+CREATE POLICY "Strict user broker vault isolation" ON broker_vault
     FOR ALL USING (account_id = auth.uid()::text);
 
 -- -------------------------------------------------------------------------

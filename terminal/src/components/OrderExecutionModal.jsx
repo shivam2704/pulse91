@@ -97,7 +97,7 @@ export default function OrderExecutionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-[#0c101a] border border-[#20293d] rounded-2xl w-full max-w-lg shadow-2xl p-6">
         {/* Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-[#1b2336]">

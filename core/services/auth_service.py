@@ -32,14 +32,14 @@ async def get_current_user_id(
             except Exception:
                 pass
 
-    # Extract 2-hour Guest Cookie or Header
-    guest_cookie = request.cookies.get("pulse91_guest_id")
-    guest_id = x_guest_id or guest_cookie
+    # 2. Extract from request.state.guest_id (set by middleware), or header/cookie
+    guest_id = getattr(request.state, "guest_id", None) or x_guest_id or request.cookies.get("pulse91_guest_id")
     if guest_id and str(guest_id).strip():
         clean_gid = str(guest_id).strip()
         if clean_gid.startswith("GUEST_") and len(clean_gid) <= 36:
             return clean_gid
         return f"GUEST_{clean_gid[:16]}"
 
-    # Fallback default for testing environments
-    return "GUEST_DEMO_01"
+    # 3. Dynamic Unique Guest ID Generation (Zero static fallbacks)
+    import uuid
+    return f"GUEST_{uuid.uuid4().hex[:8].upper()}"
